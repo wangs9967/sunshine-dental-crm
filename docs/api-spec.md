@@ -1,304 +1,86 @@
-# 阳光口腔会员运营管理系统 V1.0 — API / Cloud Functions 清单
+# FastAPI REST API 规范（V1.0）
 
-> 约定：微信小程序和管理后台不直接执行敏感数据库写操作。API/云函数统一做身份认证、RBAC、参数校验、幂等和审计。
+API 前缀 `/api/v1`。统一 JSON 响应，包含 `success`、`data/error`、`request_id`。状态码：200/201、400、401、403、404、409、422、429、500。敏感写操作使用 `Idempotency-Key` 并写 operation_logs。
 
-## 1. 通用返回格式
+## 认证
+| Method | Endpoint | 角色 |
+|---|---|---|
+| POST | /auth/wechat/login | public |
+| POST | /auth/admin/login | public |
+| POST | /auth/refresh | authenticated |
+| POST | /auth/logout | authenticated |
+| GET | /auth/me | authenticated |
 
-```ts
-interface ApiResponse<T> {
-  success: boolean;
-  data?: T;
-  error?: {
-    code: string;
-    message: string;
-    requestId: string;
-  };
-}
-```
+微信登录只接受临时 code，由后端换取 openid；不信任客户端自报 openid。后台密码 Argon2id 哈希。
 
-通用错误码：
-- `UNAUTHENTICATED`
-- `FORBIDDEN`
-- `INVALID_ARGUMENT`
-- `NOT_FOUND`
-- `CONFLICT`
-- `RATE_LIMITED`
-- `INTERNAL_ERROR`
+## 会员
+| Method | Endpoint | 角色 |
+|---|---|---|
+| POST | /members/register | 已登录未注册用户 |
+| GET/PATCH | /members/me | member |
+| GET | /members/me/points | member |
+| GET | /members/me/points-records | member |
+| GET | /members/me/exchange-orders | member |
+| GET | /members/me/exchange-orders/{order_id} | member |
 
-## 2. Auth / Member
+注册事务创建会员、客户状态、积分账户；验证员工 scene_token 后建立首次归属；注册奖励只发放一次并写流水。
 
-### `login`
-- 角色：公开（微信会话）
-- 入参：微信登录凭证
-- 返回：`session`, `memberExists`, `employeeRole?`
-- 说明：不接受客户端传入的 openid 作为可信身份。
+## 员工/客户
+| Method | Endpoint | 角色 |
+|---|---|---|
+| GET | /staff/me | employee+ |
+| GET | /staff/me/qr-code | employee+ |
+| POST | /staff/me/qr-token/rotate | employee+/manager/admin |
+| GET | /staff/me/customers | employee+ |
+| GET | /customers/{customer_id} | employee+ |
+| PATCH | /customers/{customer_id}/status | employee+ |
+| GET | /customers/{customer_id}/assignments | manager/admin |
+| POST | /customers/{customer_id}/transfer | manager/admin |
+| GET | /customer-tags | employee+ |
+| POST | /customers/{customer_id}/tags | employee+ |
+| DELETE | /customers/{customer_id}/tags/{tag_id} | employee+ |
 
-### `resolveEmployeeScene`
-- 角色：公开/已登录
-- 入参：`sceneToken`
-- 返回：安全的员工展示信息 + token 状态
-- 校验：签名、有效期、员工 active、门店状态
+员工仅查本人当前客户，manager 限本门店，admin 全局。手机号默认脱敏。二维码用服务端签发的高熵 opaque scene_token；已有负责人的会员再次扫码不得覆盖负责人。
 
-### `registerMember`
-- 角色：已登录未注册用户
-- 入参：`name,birthday,phone,sceneToken?`
-- 事务：是
-- 流程：
-  1. 检查 openid 未注册；
-  2. 创建 users；
-  3. 创建 customer_status；
-  4. 创建 points_accounts；
-  5. 若 sceneToken 合法，记录 `source_employee_id` 并建立首次归属；
-  6. 调用注册积分幂等逻辑；
-  7. 写审计/业务日志。
-- 错误：`MEMBER_ALREADY_EXISTS`, `INVALID_SCENE_TOKEN`
+## 跟进/任务
+| Method | Endpoint | 角色 |
+|---|---|---|
+| POST/GET | /customers/{customer_id}/followups | employee+ |
+| GET | /followup-tasks | employee+ |
+| POST | /followup-tasks | employee+/manager |
+| POST | /followup-tasks/{task_id}/complete | employee+ |
+| POST | /followup-tasks/{task_id}/postpone | employee+ |
+| POST | /followup-tasks/{task_id}/ignore | employee+/manager |
 
-### `getMemberProfile`
-- 角色：member
-- 返回：本人会员资料（最小必要字段）
+跟进类型 phone/wechat/home_visit/store_visit/other。effective_contact=true 时更新 last_effective_contact_at。任务状态 pending/completed/postponed/ignored。
 
-### `updateMemberProfile`
-- 角色：member
-- 入参：允许修改字段白名单
+## 积分/商城/订单
+| Method | Endpoint | 角色 |
+|---|---|---|
+| GET | /products | member+ |
+| GET | /products/{product_id} | member+ |
+| POST | /admin/products | admin |
+| PATCH | /admin/products/{product_id} | admin |
+| POST | /admin/products/{product_id}/publish | admin |
+| POST | /admin/products/{product_id}/unpublish | admin |
+| POST | /exchange-orders | member |
+| GET | /exchange-orders/{order_id} | member/manager/admin（按范围） |
+| POST | /exchange-orders/{order_id}/verify | manager/admin/授权员工 |
+| POST | /exchange-orders/{order_id}/cancel | admin |
+| POST | /exchange-orders/{order_id}/refund | admin |
+| POST | /admin/points/adjustments | admin |
+| GET | /admin/members/{member_id}/points-records | admin |
 
-## 3. Employee / QR
+兑换事务锁定积分账户和商品，检查商品状态、库存、积分、限购，扣积分、写流水、扣库存、创建订单和核销码。核销只允许 pending→verified。退款的订单、积分返还和流水同事务完成。V1.0 不接支付。
 
-### `getEmployeeProfile`
-- 角色：employee+
+## 管理后台
+GET `/admin/dashboard`、`/admin/members`、`/admin/members/{id}`、`/admin/staff`、`/admin/followups`、`/admin/followup-tasks`、`/admin/exchange-orders`、`/admin/assignments`、`/admin/operation-logs`、`/admin/system-configs`；POST `/admin/staff`；PATCH `/admin/staff/{id}`、`/admin/system-configs/{key}`。manager 查询限本门店。
 
-### `generateEmployeeQRCode`
-- 角色：employee+
-- 返回：小程序二维码/临时地址
-- 规则：二维码 scene 使用服务端签发的 opaque token，不直接信任 `employee_id`。
+## 上传/定时任务
+POST `/uploads/presign` 获取 COS 短时上传授权。Celery Beat 每日执行 generate_recall_tasks、generate_reactivation_tasks、cleanup_expired_qr_tokens。提醒只生成后台名单，员工手动联系。
 
-### `getMyCustomers`
-- 角色：employee+
-- 入参：`keyword,statusFilters,tags,page,pageSize`
-- 范围：employee 仅本人当前归属；manager 本门店；admin 按管理接口处理
+## 错误码
+UNAUTHENTICATED、FORBIDDEN、INVALID_ARGUMENT、NOT_FOUND、CONFLICT、RATE_LIMITED、MEMBER_ALREADY_EXISTS、INVALID_SCENE_TOKEN、EMPLOYEE_DISABLED、CUSTOMER_NOT_ASSIGNED、CROSS_STORE_FORBIDDEN、SAME_OWNER、TARGET_EMPLOYEE_DISABLED、INSUFFICIENT_POINTS、POINTS_NOT_ENOUGH、PRODUCT_OFFLINE、OUT_OF_STOCK、LIMIT_EXCEEDED、ORDER_ALREADY_VERIFIED、INVALID_ORDER_STATUS、DUPLICATE_REQUEST、INTERNAL_ERROR。
 
-### `getCustomerDetail`
-- 角色：employee+
-- 入参：`customerId`
-- 权限：先校验当前归属/门店范围
-
-## 4. Assignment
-
-### `bindCustomerToEmployee`
-- 内部调用为主
-- 用于新会员首次扫码绑定
-- 已存在当前负责人时不得覆盖
-
-### `transferCustomer`
-- 角色：manager/admin
-- 入参：`customerId,newEmployeeId,reason,idempotencyKey`
-- 事务：是
-- 流程：关闭旧 `is_current` → 新建 assignment → 记录 operation_log
-- 错误：`SAME_OWNER`, `TARGET_EMPLOYEE_DISABLED`, `CROSS_STORE_FORBIDDEN`
-
-### `getAssignmentHistory`
-- 角色：manager/admin
-
-## 5. Customer CRM
-
-### `updateCustomerStatus`
-- 角色：employee+
-- 入参：`customerId,visitStatus?,consumeStatus?,dealStatus?`
-- 权限：员工仅本人客户
-
-### `getTags`
-- 角色：employee+
-
-### `addCustomerTag` / `removeCustomerTag`
-- 角色：employee+
-- 必须校验客户访问范围
-
-## 6. Follow-up
-
-### `createFollowupRecord`
-- 角色：employee+
-- 入参：`customerId,type,followupAt,content,feedback,gift,nextFollowupAt,effectiveContact`
-- 事务：建议
-- 若 `effectiveContact=true`：更新 `customer_status.last_effective_contact_at`
-
-### `getFollowupRecords`
-- 角色：employee+
-- 入参：`customerId,page,pageSize`
-
-### `getMyFollowupTasks`
-- 角色：employee+
-- 入参：`taskType,status,dateRange`
-
-### `completeFollowupTask`
-- 角色：employee+
-- 入参：`taskId,result,nextFollowupAt?`
-- 状态机：仅 `pending/postponed → completed`
-
-### `postponeFollowupTask`
-- 角色：employee+
-- 入参：`taskId,nextScheduledAt,reason`
-
-### `ignoreFollowupTask`
-- 角色：employee+/manager
-- 入参：`taskId,reason`
-
-## 7. Scheduled Functions
-
-### `generateRecallTasks`
-- 触发：每日定时
-- 依据：`customer_status.next_recall_at`
-- 去重：`dedupe_key = recall:{userId}:{date}`
-
-### `generateReactivationTasks`
-- 触发：每日定时
-- 依据：`last_effective_contact_at`
-- 阈值：90/180/365 天（配置化）
-- 去重：每个用户、规则、周期只生成一条有效任务
-
-## 8. Points
-
-### `getPointsAccount`
-- 角色：member（本人）/admin（查询）
-
-### `getPointsRecords`
-- 角色：member（本人）/admin
-
-### `grantRegisterBonus`
-- 内部函数
-- 幂等键：`register_bonus:{userId}`
-- 事务：是
-- 规则：查 points_records 幂等键后再发放，禁止只依赖 boolean 标记
-
-### `adjustPoints`
-- 角色：admin
-- 入参：`userId,amount,reason,idempotencyKey`
-- 事务：是
-- 操作：账户余额 + 流水 + 审计原子完成
-- 错误：`INSUFFICIENT_POINTS`, `DUPLICATE_REQUEST`
-
-## 9. Mall / Product
-
-### `getProducts`
-- 角色：member+
-- 仅返回 `online` 商品
-
-### `getProductDetail`
-- 角色：member+
-
-### `createProduct` / `updateProduct` / `setProductStatus`
-- 角色：admin
-- 库存和价格只能后端写
-
-## 10. Exchange Order
-
-### `exchangeProduct`
-- 角色：member
-- 入参：`productId,quantity,idempotencyKey`
-- **必须使用数据库事务**
-- 原子流程：
-  1. 校验商品 online；
-  2. 校验数量和限购；
-  3. 校验库存；
-  4. 校验积分余额；
-  5. 扣积分账户；
-  6. 新增 points_records（type=exchange）；
-  7. 扣商品库存；
-  8. 创建 exchange_orders；
-  9. 生成核销码。
-- 任一步失败全部回滚。
-- 错误：`PRODUCT_OFFLINE`,`OUT_OF_STOCK`,`POINTS_NOT_ENOUGH`,`LIMIT_EXCEEDED`,`DUPLICATE_REQUEST`
-
-### `getMyExchangeOrders`
-- 角色：member
-
-### `getExchangeOrderDetail`
-- 角色：member（本人）/manager/admin
-
-### `verifyExchangeOrder`
-- 角色：manager/admin（或明确授权的员工）
-- 入参：`orderId/verificationCode,idempotencyKey`
-- 原子状态：`pending → verified`
-- 防重复核销
-
-### `cancelExchangeOrder`
-- 角色：admin（V1）
-- 仅允许满足规则的 pending 订单
-- 若需要退积分，取消 + 积分退款 + 流水在同一事务中完成
-
-## 11. Admin Queries
-
-### `adminGetDashboard`
-- 角色：manager/admin
-- manager 限本门店
-
-### `adminGetMembers`
-### `adminGetEmployees`
-### `adminGetFollowups`
-### `adminGetTasks`
-### `adminGetPointsRecords`
-### `adminGetOrders`
-
-全部支持分页、筛选，并执行数据范围校验。
-
-## 12. System Config / Audit
-
-### `getSystemConfigs`
-- 角色：admin
-
-### `updateSystemConfig`
-- 角色：admin
-- 变更必须写 operation_logs
-
-### `getOperationLogs`
-- 角色：admin
-- 返回脱敏审计数据
-
-## 13. RBAC 矩阵
-
-| 能力 | member | employee | manager | admin |
-|---|---:|---:|---:|---:|
-| 查看本人积分 | ✅ | - | - | ✅ |
-| 兑换商品 | ✅ | - | - | - |
-| 查看本人客户 | - | ✅ | ✅ | ✅ |
-| 修改客户状态 | - | ✅(本人客户) | ✅(本店) | ✅ |
-| 新增跟进 | - | ✅(本人客户) | ✅(本店) | ✅ |
-| 转移客户 | - | ❌ | ✅(本店) | ✅ |
-| 人工调整积分 | - | ❌ | ❌ | ✅ |
-| 商品管理 | - | ❌ | ❌ | ✅ |
-| 核销订单 | - | 按授权 | ✅ | ✅ |
-| 系统配置 | - | ❌ | ❌ | ✅ |
-| 查看审计日志 | - | ❌ | ❌ | ✅ |
-
-## 14. 云函数目录建议
-
-```text
-cloudfunctions/
-  auth-login/
-  member-register/
-  member-profile/
-  employee-profile/
-  employee-qrcode/
-  customer-list/
-  customer-detail/
-  customer-status-update/
-  customer-transfer/
-  followup-create/
-  followup-list/
-  followup-task-list/
-  followup-task-complete/
-  scheduler-recall/
-  scheduler-reactivation/
-  points-account/
-  points-records/
-  points-adjust/
-  product-list/
-  product-manage/
-  exchange-product/
-  exchange-orders/
-  exchange-verify/
-  admin-dashboard/
-  system-config/
-  audit-logs/
-  _shared/
-```
-
-`_shared` 统一放：认证、RBAC、错误码、日志、参数校验、幂等、事务辅助、ID/订单号生成。
+## 实现要求
+FastAPI 自动生成 OpenAPI；所有 endpoint 使用 Pydantic schema；路由层只处理认证、校验和响应，业务规则放 service 层；SQLAlchemy session 统一管理。Pytest 覆盖重复请求、积分不足、库存不足、并发兑换、重复核销和越权访问。
