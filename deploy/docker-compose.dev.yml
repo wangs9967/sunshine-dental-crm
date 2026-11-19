@@ -1,0 +1,16 @@
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: \${POSTGRES_DB:-sunshine_dental}
+      POSTGRES_USER: \${POSTGRES_USER:-sunshine}
+      POSTGRES_PASSWORD: \${POSTGRES_PASSWORD:-change-me}
+    ports: ["5432:5432"]
+    volumes: [sunshine_pg:/var/lib/postgresql/data]
+  redis:
+    image: redis:7-alpine
+    ports: ["6379:6379"]
+    volumes: [sunshine_redis:/data]
+volumes:
+  sunshine_pg:
+  sunshine_redis:

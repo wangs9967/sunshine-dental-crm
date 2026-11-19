@@ -1,100 +1,25 @@
-# CLAUDE.md
+# Claude Code 规则
+项目：阳光口腔会员运营管理系统 V1.0。单门店，只服务阳光口腔。禁止引入多门店、门店切换、store_id、跨门店权限或未来多门店预留抽象。
 
-## 1. 项目说明
+## 开发前阅读
+README.md 及 docs/ 下 business-rules、open-questions、ui-freeze、navigation、permissions、tech-stack、database-schema、api-spec、test-cases。
 
-项目名称：阳光口腔会员运营管理系统
-版本：V1.0
+## 固定技术栈
+微信原生小程序 + TypeScript + TDesign；React + TypeScript + Vite + Ant Design 5；Python + FastAPI + Pydantic 2；SQLAlchemy 2 + Alembic；PostgreSQL；Redis + Celery；COS；Docker Compose + Nginx。模块化单体，不拆微服务。
 
-这是一个口腔门诊会员运营与积分商城系统。
+## 已确认规则
+- 单门店；不接支付；不存储临床病历/诊断/影像/治疗方案。
+- 会员与员工共用一个小程序。会员微信登录后填写姓名、生日、手机号。
+- 员工二维码使用服务端签发 scene_token；新会员首次扫码绑定员工。
+- 已有负责人的会员再次扫描其他员工二维码不得自动改绑。
+- 到店、消费、成交是三个独立状态。
+- 系统生成复查/唤醒名单，员工手动联系。
+- 家访和到店回访均支持，统一记录。
+- 积分变动必须写不可变流水；兑换必须事务化、幂等。
+- 客户转移必须保留历史。
 
-## 2. 开发前必须阅读
+## 待确认规则
+以 docs/open-questions.md 为准。未确认前不得写死积分数值、有效期、领取期限、提醒阈值、员工登录方式；不得把旧建议值当最终规则。
 
-每次开始开发前，必须阅读：
-
-- README.md
-- docs/ui-freeze.md
-- docs/navigation.md
-- docs/tech-stack.md
-- docs/database-schema.md
-- docs/api-spec.md
-
-如文档存在冲突，先向项目负责人确认，不得自行修改业务规则。
-
-## 3. 固定技术栈
-
-微信端：
-- 微信原生小程序
-- TypeScript
-- TDesign MiniProgram
-
-管理后台：
-- React
-- TypeScript
-- Vite
-- Ant Design 5
-
-后端：
-- Python
-- FastAPI
-- SQLAlchemy 2
-- PostgreSQL
-- Alembic
-- Redis
-- Celery
-
-部署：
-- Docker Compose
-- Nginx
-
-禁止擅自更换技术栈。
-
-## 4. 核心业务规则
-
-- V1.0 不接入支付功能。
-- 会员与员工使用同一个微信小程序。
-- 会员实名信息由用户填写。
-- 员工通过专属二维码绑定新会员。
-- 已有客户不得被其他员工二维码自动改绑。
-- 积分变动必须有积分流水。
-- 积分兑换必须使用数据库事务。
-- 客户归属转移必须保留历史记录。
-- 复查提醒由系统生成，员工手动联系。
-- 不存储临床病历及诊断数据。
-
-## 5. 权限规则
-
-系统角色：
-
-- member：会员
-- employee：员工
-- manager：店长
-- admin：管理员
-
-所有权限必须由后端验证，不能只依赖前端控制。
-
-## 6. UI 设计规则
-
-- Figma 是 V1.0 唯一视觉基线。
-- 不擅自增加页面。
-- 不擅自改变页面布局和业务流程。
-- 优先复用公共组件。
-- 每完成一个页面，都要进行视觉对照。
-
-## 7. 开发规范
-
-- 后端采用模块化单体架构。
-- 数据库修改必须使用 Alembic。
-- API 统一使用 /api/v1。
-- 关键业务必须考虑事务和幂等。
-- 敏感操作必须记录审计日志。
-- 不得将密钥提交到 GitHub。
-- 重要业务必须编写测试。
-
-## 8. 开发工作方式
-
-- 开发前先分析需求和相关文档。
-- 一次只完成一个明确的开发任务。
-- 不要未经确认批量修改其他模块。
-- 完成后说明修改了哪些文件。
-- 说明如何运行和测试。
-- 遇到需求不明确时先提问，不要猜测。
+## 工程规范
+后端校验全部权限；微信身份由后端临时 code 换取；手机号加密、默认脱敏；数据库变更使用 Alembic；API 前缀 /api/v1；关键操作事务、幂等、审计；密钥仅放环境变量。一次只做一个明确任务，完成后报告变更、运行和测试；不明确先提问。

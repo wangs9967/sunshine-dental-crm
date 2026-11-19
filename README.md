@@ -1,19 +1,15 @@
-# Sunshine Dental CRM
-
-阳光口腔会员运营管理系统 V1.0。
+# Sunshine Dental CRM V1.0
+阳光口腔会员运营管理系统。当前是开发交付文档与最小工程骨架，业务功能尚未实现，不可直接用于生产。
 
 ## 范围
-微信会员端与员工端共用一个原生小程序；Web 管理后台负责会员、员工、跟进、积分、商品、订单、提醒和配置。V1.0 不接支付，不存临床 EMR 数据。
+- 单门店：只服务阳光口腔，不做多门店、门店切换或跨门店权限。
+- 会员与员工共用一个微信原生小程序；管理后台为独立 Web。
+- 不接入支付；不保存临床病历、诊断、影像或治疗方案。
 
 ## 技术栈
-微信原生 TypeScript + TDesign MiniProgram；React + TypeScript + Vite + Ant Design 5；Python + FastAPI；SQLAlchemy 2 + Alembic；PostgreSQL；Redis + Celery；腾讯云 COS；Docker Compose + Nginx。
+微信原生小程序 + TypeScript + TDesign；React + TypeScript + Vite + Ant Design 5；Python + FastAPI + Pydantic 2；PostgreSQL + SQLAlchemy 2 + Alembic；Redis + Celery；COS；Docker Compose + Nginx。
 
-## Figma
-https://www.figma.com/design/vHq5a7gAf59V1lDiR94NdH
+## 先读
+CLAUDE.md、docs/business-rules.md、docs/open-questions.md、docs/ui-freeze.md、docs/navigation.md、docs/permissions.md、docs/tech-stack.md、docs/database-schema.md、docs/api-spec.md、docs/test-cases.md。
 
-## 文档
-- docs/ui-freeze.md
-- docs/navigation.md
-- docs/tech-stack.md
-- docs/database-schema.md
-- docs/api-spec.md
+Figma: https://www.figma.com/design/vHq5a7gAf59V1lDiR94NdH

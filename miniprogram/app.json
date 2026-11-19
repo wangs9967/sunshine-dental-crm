@@ -1,0 +1,11 @@
+{
+  "pages": [
+    "pages/index/index"
+  ],
+  "window": {
+    "navigationBarTitleText": "阳光口腔",
+    "navigationBarBackgroundColor": "#2878D8",
+    "navigationBarTextStyle": "white",
+    "backgroundColor": "#F4F7FB"
+  }
+}
