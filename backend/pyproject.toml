@@ -5,6 +5,14 @@ build-backend="setuptools.build_meta"
 name="sunshine-dental-backend"
 version="0.1.0"
 requires-python=">=3.12"
-dependencies=["fastapi>=0.110,<1","uvicorn[standard]>=0.27,<1","pydantic>=2.6,<3","SQLAlchemy>=2,<3","alembic>=1.13,<2","psycopg[binary]>=3.1,<4","redis>=5,<6","celery>=5.3,<6"]
+dependencies=["fastapi>=0.110,<1","uvicorn[standard]>=0.27,<1","pydantic>=2.6,<3","pydantic-settings>=2.2,<3","SQLAlchemy>=2,<3","alembic>=1.13,<2","psycopg[binary]>=3.1,<4","redis>=5,<6","celery>=5.3,<6"]
 [project.optional-dependencies]
-dev=["pytest>=8,<9","httpx>=0.27,<1"]
+dev=["pytest>=8,<9","httpx>=0.27,<1","mypy>=1.14,<2"]
+
+[tool.setuptools.packages.find]
+include = ["app", "app.*"]
+
+[tool.mypy]
+python_version = "3.12"
+files = ["app", "tests"]
+plugins = ["pydantic.mypy"]
