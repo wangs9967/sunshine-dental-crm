@@ -1,8 +1,8 @@
 # UI Freeze — 阳光口腔 V1.0
 
-状态：FROZEN / READY FOR DEV。Figma：https://www.figma.com/design/vHq5a7gAf59V1lDiR94NdH
+视觉冻结状态待核验。仓库原记录为 `FROZEN / READY FOR DEV`，交接包记录为 `UNDER REVIEW`。最近一次检查中 Figma 文件不可访问。第二阶段的[路由与交互清单](navigation.md)用于设计评审，逐页视觉核验待获得可访问版本后开展。 [Figma](https://www.figma.com/design/vHq5a7gAf59V1lDiR94NdH)
 
-当前 Figma 是 V1.0 唯一视觉基线。允许修复明确 UI 缺陷、文案、轻微适配；新增页面、改变业务流程/字段/权限须先更新产品文档并获确认。
+经负责人确认的 Figma 版本作为 V1.0 视觉基线。新增页面或涉及业务流程、字段和权限的变更须经评审。
 
 ## 页面范围
 - 会员端：会员首页、会员注册、积分明细、积分商城、商品详情、兑换确认、兑换成功、我的兑换、个人中心。

@@ -1,11 +1,73 @@
-# 页面路由
-## 会员端
-/pages/auth/index、/pages/member/register、/pages/member/home、/pages/points/index、/pages/mall/index、/pages/mall/detail、/pages/mall/confirm、/pages/mall/success、/pages/orders/index、/pages/member/profile。
+# V1.0 三端路由与交互
 
-## 员工端
-/pages/staff/dashboard、/pages/staff/qrcode、/pages/staff/customers、/pages/staff/customer-detail、/pages/staff/followup-create、/pages/staff/followup-history、/pages/staff/home-visit、/pages/staff/tasks、/pages/staff/transfer（manager/admin）。
+第二阶段最终评审稿。路由为实现基线。视觉样式和页面呈现需在 Figma 恢复访问后逐页核对。权限组见[权限矩阵](permissions.md)，数据映射见 [API 契约](api-spec.md)。
+
+## 会员小程序
+
+| 路由 | 页面与动作 | 权限 |
+|---|---|---|
+| /pages/auth/index | 微信登录、员工二维码场景入口、注册分流 | 公开 |
+| /pages/member/register | 填写姓名、生日、手机号，提示绑定结果 | R1 |
+| /pages/member/home | 会员身份、积分、商城、门诊入口 | R2 |
+| /pages/member/profile | 资料详情，以及隐私和退出入口。编辑权限确认后开放 | R2 / R3 |
+| /pages/member/privacy | 隐私政策及服务协议 | 公开 |
+| /pages/member/clinic | 门诊联系、地址、地图打开或复制地址 | 公开 |
+| /pages/points/index | 余额、积分明细与变动类型 | R2 |
+| /pages/mall/index | 已上架商品列表、分类、缺货标记 | R2 |
+| /pages/mall/detail?id= | 商品、积分价格、限额提示 | R2 |
+| /pages/mall/confirm?id= | 数量、预计积分、确认提交、失败提示 | R4 |
+| /pages/mall/success?id= | 订单创建结果、查看兑换详情 | R2 |
+| /pages/orders/index | 待核销及已核销订单列表 | R2 |
+| /pages/orders/detail?id= | 商品快照、订单状态、动态凭证签发与刷新 | R2 / R4 |
+
+## 员工小程序
+
+| 路由 | 页面与动作 | 权限 |
+|---|---|---|
+| /pages/staff/dashboard | 工作台、我的客户及任务入口 | R5 / R6 / R8 |
+| /pages/staff/profile | 当前员工资料、会话退出 | R5 |
+| /pages/staff/qrcode | 员工来源码、过期与换码，首次展示或重开页面时显式签发 | R5 |
+| /pages/staff/customers | 当前负责客户、筛选和搜索 | R6 |
+| /pages/staff/customer-invite | 新增客户入口，展示来源码并引导客户扫码注册 | R5 |
+| /pages/staff/customer-detail?id= | 客户运营资料，独立展示到店、消费、成交 | R6 |
+| /pages/staff/followup-create?id= | 普通运营跟进 | R6 |
+| /pages/staff/followup-history?id= | 运营跟进与家访历史 | R6 |
+| /pages/staff/home-visit?id= | 家访记录，使用 home_visit | R6 |
+| /pages/staff/tasks | 我的回访任务、完成、延期、忽略 | R8 |
+| /pages/staff/transfer?id= | 选择在职员工、填写原因、确认转移 | R7 |
+| /pages/staff/verify | 扫码核销与结果 | R10，普通员工待开放 |
+
+登录与身份切换复用 /pages/auth/index。待定员工登录方式不影响页面和权限映射。实际使用前由服务端启用对应身份及能力。
 
 ## 管理后台
-/login、/dashboard、/members、/members/:id、/employees、/employees/:id、/assignments、/followups、/tasks、/points/accounts、/points/records、/mall/products、/mall/orders、/settings、/audit-logs。
 
-客户详情独立展示到店、消费、成交。列表状态：loading/success/empty/error/refreshing/no_permission；提交状态：idle/validating/submitting/success/business_error/network_error。
+| 路由 | 页面与动作 | 权限 |
+|---|---|---|
+| /login | 店长或管理员登录 | 公开 |
+| /dashboard | 全店数据总览 | R11 |
+| /members、/members/:id | 会员列表及运营详情 | R11 / R6 |
+| /employees、/employees/:id | 员工列表、详情与获准的员工管理 | R12 / R13 |
+| /assignments | 当前归属、转移与历史 | R7 |
+| /followups | 运营跟进与家访查询 | R11 |
+| /tasks | 回访提醒列表与处理、人工任务创建 | R8 / R9 |
+| /points/accounts、/points/records | 积分余额、流水与获准的人工调整 | R11 / R14 |
+| /mall/products、/mall/products/:id | 商品列表、详情和库存流水 | R11 |
+| /mall/products/new、/mall/products/:id/edit | 商品新建、编辑和上下架 | R15 |
+| /mall/products/:id/stock | 库存调整、原因与提交结果 | R16 |
+| /mall/orders、/mall/orders/:id | 兑换列表和详情、核销入口 | R11 / R10 |
+| /mall/verify、/mall/verifications | 凭证核销、核销记录 | R10 / R11 |
+| /settings | 系统设置，业务时区只读 | R17 |
+| /roles、/audit-logs | 固定角色权限与脱敏操作日志 | R18 |
+
+## 交互状态验收清单
+
+| 场景 | 状态与行为 |
+|---|---|
+| 登录与守卫 | 初始校验、未登录、会话过期、角色无权限、资源不可见。会话失效回登录，业务写入失败保留表单，待开放功能不给出可提交入口。 |
+| 列表与详情 | 初次加载、刷新、加载更多、空列表、筛选无结果、错误重试、不可见、下架。详情返回列表保持筛选与页码。 |
+| 表单 | 初始、编辑、校验中、字段错误、提交中、成功、业务拒绝、网络异常。禁用重复点击；网络结果未知时使用原幂等键和原请求重试，用户修改请求后生成新键。 |
+| 月限兑与商城 | 缺货、积分不足、额度不足、商品下架、成功。额度提示使用服务端返回值，订单状态和成本以服务端结果为准。 |
+| 待核销与凭证 | 待核销、凭证加载、有效、过期、重新签发、已核销。刷新后只展示新凭证，离页清除本地明文。核销成功更新详情；重复、无效、过期及越权显示各自结果。 |
+| 客户跟进与转移 | 当前归属、转移中、归属已变、完成、无权限。提交冲突时刷新负责人和候选，仍须填写转移原因。 |
+| 任务 | 待处理、延期、完成、忽略。员工手动联系，界面呈现时间及状态。 |
+| 后台管理 | 读写权限分别控制，展示数据脱敏；商品版本冲突时刷新对比，库存和积分调整成功后刷新快照及流水。 |

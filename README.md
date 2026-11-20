@@ -10,6 +10,9 @@
 微信原生小程序 + TypeScript + TDesign；React + TypeScript + Vite + Ant Design 5；Python + FastAPI + Pydantic 2；PostgreSQL + SQLAlchemy 2 + Alembic；Redis + Celery；COS；Docker Compose + Nginx。
 
 ## 先读
-CLAUDE.md、docs/business-rules.md、docs/open-questions.md、docs/ui-freeze.md、docs/navigation.md、docs/permissions.md、docs/tech-stack.md、docs/database-schema.md、docs/api-spec.md、docs/test-cases.md。
+[AGENTS.md](AGENTS.md) 和 [V1.0 交接入口](docs/project-handoff/v1.0/README_先看.md) 说明工程规范与业务范围。
+
+- [统一的本地启动与验证说明](docs/local-development.md)
+- [第二阶段设计评审报告与交付清单](docs/database-design-gap-report.md)
 
 Figma: https://www.figma.com/design/vHq5a7gAf59V1lDiR94NdH
