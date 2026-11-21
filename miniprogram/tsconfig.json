@@ -1,10 +1,18 @@
 {
   "compilerOptions": {
     "target": "ES2020",
-    "module": "ESNext",
+    "module": "CommonJS",
     "strict": true,
     "skipLibCheck": true,
-    "types": ["miniprogram-api-typings"]
+    "types": [
+      "miniprogram-api-typings"
+    ]
   },
-  "include": ["app.ts", "pages/**/*.ts"]
+  "include": [
+    "app.ts",
+    "pages/**/*.ts",
+    "components/**/*.ts",
+    "config/**/*.ts",
+    "services/**/*.ts"
+  ]
 }

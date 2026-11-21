@@ -1,1 +1,7 @@
-page { background:#F4F7FB; color:#1B2D40; }
+page {
+  background: #f4f7fb;
+  color: #1b2d40;
+  font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", sans-serif;
+  --td-brand-color: #2878d8;
+  --td-brand-color-active: #155aa8;
+}

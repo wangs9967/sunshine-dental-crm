@@ -1,0 +1,6 @@
+{
+  "navigationBarTitleText": "会员首页",
+  "usingComponents": {
+    "workspace-shell": "/components/workspace/workspace"
+  }
+}

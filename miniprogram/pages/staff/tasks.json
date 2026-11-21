@@ -1,0 +1,6 @@
+{
+  "navigationBarTitleText": "回访任务",
+  "usingComponents": {
+    "workspace-shell": "/components/workspace/workspace"
+  }
+}

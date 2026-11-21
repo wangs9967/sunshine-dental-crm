@@ -1,11 +1,22 @@
 {
   "pages": [
-    "pages/index/index"
+    "pages/index/index",
+    "pages/auth/index",
+    "pages/member/home",
+    "pages/member/profile",
+    "pages/points/index",
+    "pages/staff/dashboard",
+    "pages/staff/tasks",
+    "pages/staff/profile"
   ],
   "window": {
     "navigationBarTitleText": "阳光口腔",
-    "navigationBarBackgroundColor": "#2878D8",
-    "navigationBarTextStyle": "white",
+    "navigationBarBackgroundColor": "#F4F7FB",
+    "navigationBarTextStyle": "black",
     "backgroundColor": "#F4F7FB"
+  },
+  "sitemapLocation": "sitemap.json",
+  "usingComponents": {
+    "t-button": "tdesign-miniprogram/button/button"
   }
 }

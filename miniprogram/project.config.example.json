@@ -4,6 +4,7 @@
   "projectname": "sunshine-dental-crm",
   "miniprogramRoot": "./",
   "setting": {
+    "es6": true,
     "useCompilerPlugins": ["typescript"]
   }
 }

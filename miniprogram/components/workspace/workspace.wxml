@@ -1,0 +1,27 @@
+<view class="workspace">
+  <block wx:if="{{permitted}}">
+    <view class="workspace-hero">
+      <text class="workspace-role">{{roleLabel}}</text>
+      <view class="workspace-title">{{title}}</view>
+    </view>
+    <view class="workspace-empty" wx:if="{{emptyText}}">{{emptyText}}</view>
+    <view class="workspace-panel">
+      <view class="workspace-heading">服务导航</view>
+      <block wx:for="{{links}}" wx:key="url">
+        <view class="workspace-row workspace-current" wx:if="{{index === current}}">
+          <view><view class="workspace-label">{{item.label}}</view><view class="workspace-detail">{{item.description}}</view></view>
+          <text class="workspace-marker">当前</text>
+        </view>
+        <navigator class="workspace-row" wx:else url="{{item.url}}" open-type="redirect" hover-class="workspace-pressed">
+          <view><view class="workspace-label">{{item.label}}</view><view class="workspace-detail">{{item.description}}</view></view>
+          <text class="workspace-arrow">›</text>
+        </navigator>
+      </block>
+    </view>
+    <t-button theme="primary" variant="outline" block bind:tap="returnToEntry">切换演示身份</t-button>
+  </block>
+  <block wx:else>
+    <view class="workspace-empty">请先选择此页面所需的演示身份。</view>
+    <t-button theme="primary" block bind:tap="returnToEntry">返回身份选择</t-button>
+  </block>
+</view>

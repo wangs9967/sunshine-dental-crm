@@ -1,0 +1,6 @@
+{
+  "navigationBarTitleText": "员工资料",
+  "usingComponents": {
+    "workspace-shell": "/components/workspace/workspace"
+  }
+}

@@ -1,0 +1,20 @@
+<view class="entry">
+  <view class="entry-hero">
+    <text class="entry-brand">阳光口腔</text>
+    <view class="entry-title">选择使用身份</view>
+  </view>
+  <view wx:if="{{demoAvailable}}" class="entry-panel">
+    <view class="entry-option">
+      <view class="entry-option-title">会员端</view>
+      <view class="entry-description">浏览会员服务</view>
+      <t-button theme="primary" block data-role="member" disabled="{{opening}}" bind:tap="openWorkspace">进入会员端</t-button>
+    </view>
+    <view class="entry-option">
+      <view class="entry-option-title">员工端</view>
+      <view class="entry-description">打开员工工作台</view>
+      <t-button theme="primary" variant="outline" block data-role="employee" disabled="{{opening}}" bind:tap="openWorkspace">进入员工端</t-button>
+    </view>
+    <view class="entry-note">当前为演示环境</view>
+  </view>
+  <view wx:else class="entry-panel">登录服务暂不可用。</view>
+</view>

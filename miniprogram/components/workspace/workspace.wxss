@@ -1,0 +1,13 @@
+.workspace { padding: 36rpx; }
+.workspace-hero { border-radius: 28rpx; padding: 38rpx 36rpx; background: #155aa8; color: white; }
+.workspace-role { font-size: 26rpx; color: #e0edff; }
+.workspace-title { font-size: 48rpx; font-weight: 700; margin-top: 14rpx; }
+.workspace-panel, .workspace-empty { background: white; border-radius: 24rpx; padding: 28rpx; margin: 26rpx 0; }
+.workspace-empty { font-size: 28rpx; color: #60728a; }
+.workspace-heading { font-size: 30rpx; font-weight: 650; margin: 0 0 16rpx 8rpx; }
+.workspace-row { display: flex; justify-content: space-between; align-items: center; padding: 20rpx 16rpx; min-height: 68rpx; border-radius: 16rpx; }
+.workspace-current, .workspace-pressed { background: #edf5ff; }
+.workspace-label { font-size: 29rpx; font-weight: 600; }
+.workspace-detail { font-size: 24rpx; color: #60728a; margin-top: 6rpx; }
+.workspace-marker { color: #155aa8; font-size: 23rpx; }
+.workspace-arrow { color: #155aa8; font-size: 38rpx; }

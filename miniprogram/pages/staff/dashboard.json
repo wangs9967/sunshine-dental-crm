@@ -1,0 +1,6 @@
+{
+  "navigationBarTitleText": "员工工作台",
+  "usingComponents": {
+    "workspace-shell": "/components/workspace/workspace"
+  }
+}
