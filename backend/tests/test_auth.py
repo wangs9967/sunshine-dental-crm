@@ -8,7 +8,7 @@ from collections.abc import Iterator
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
 from dataclasses import dataclass
-from datetime import date
+from datetime import UTC, date, datetime
 from threading import Barrier
 from types import SimpleNamespace
 from uuid import UUID, uuid4
@@ -24,6 +24,8 @@ from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session
 
 import app.auth.sessions as sessions_module
+from app.auth.admin_login import PAIR_LIMIT, SOURCE_LIMIT, login_retry_after
+from app.auth.passwords import hash_password
 from app.auth.sessions import KEY_PREFIX, SessionReference, SessionService, TokenPair, digest
 from app.db.models import Account, Base, Member, OperationLog, StaffProfile
 from app.db.session import get_db
@@ -331,3 +333,104 @@ def test_unexpected_error_uses_request_id_without_exception_details(caplog: pyte
         assert response.headers["X-Request-ID"] in caplog.text
         assert "secret test value" not in response.text + caplog.text
         assert_error(client.get("/missing"), 404, "NOT_FOUND")
+
+
+def add_login_account(
+    engine: Engine, *, role: str | None, status: str = "active", staff_disabled: bool = False,
+) -> tuple[UUID, str, str]:
+    account_id = uuid4()
+    username = f"test-{account_id.hex}"
+    password = secrets.token_urlsafe(24)
+    with Session(engine) as db:
+        db.add(Account(id=account_id, username=username, password_hash=hash_password(password), status=status))
+        db.flush()
+        if role:
+            db.add(StaffProfile(
+                account_id=account_id, display_name="Test login account", role=role,
+                disabled_at=datetime.now(UTC) if staff_disabled else None,
+            ))
+        db.commit()
+    return account_id, username, password
+
+
+@pytest.mark.parametrize("role", ["admin", "manager"])
+def test_admin_login_issues_and_revokes_session(auth: AuthFixture, role: str, caplog: pytest.LogCaptureFixture) -> None:
+    account_id, username, password = add_login_account(auth.engine, role=role)
+    response = auth.client.post(f"{AUTH}/admin/login", json={"username": username, "password": password})
+    assert response.status_code == 200
+    assert response.headers["Cache-Control"] == "no-store"
+    body = response.json()
+    assert body["request_id"] == response.headers["X-Request-ID"]
+    data = body["data"]
+    assert data["account_id"] == str(account_id)
+    assert data["selected_role"] == role
+    assert data["available_roles"] == [role]
+    assert not data["registration_required"]
+    assert data["expires_in"] == 600
+    assert "password" not in response.text
+    headers = bearer(data["access_token"])
+    assert auth.client.get(f"{AUTH}/me", headers=headers).json()["data"]["selected_role"] == role
+    assert auth.client.post(f"{AUTH}/logout", headers=headers).is_success
+    assert_error(auth.client.get(f"{AUTH}/me", headers=headers), 401, "INVALID_SESSION")
+    assert_error(auth.client.post(f"{AUTH}/refresh", json={"refresh_token": data["refresh_token"]}),
+                 401, "INVALID_SESSION")
+
+    with Session(auth.engine) as db:
+        row = db.scalars(select(OperationLog).where(OperationLog.request_id == body["request_id"])).one()
+        account = db.get_one(Account, account_id)
+        assert account.password_hash and account.password_hash.startswith("$argon2id$v=19$m=65536,t=3,p=4$")
+        assert password != account.password_hash
+        assert row.actor_account_id == account_id and row.actor_role == role
+        assert row.action == "admin_login" and row.summary == "success"
+        assert row.before_data is None and row.after_data == {"channel": "admin_web"}
+    for secret in (password, data["access_token"], data["refresh_token"]):
+        assert secret not in caplog.text
+
+
+@pytest.mark.parametrize(("outcome", "status", "role", "staff_disabled"), [
+    ("invalid_password", "active", "admin", False),
+    ("unknown_account", "active", None, False),
+    ("inactive_account", "disabled", "admin", False),
+    ("inactive_account", "locked", "admin", False),
+    ("invalid_staff_role", "active", "employee", False),
+    ("missing_staff_profile", "active", None, False),
+    ("identity_rejected", "active", "manager", True),
+])
+def test_login_failures_have_same_response_and_anonymous_audit(
+    auth: AuthFixture, outcome: str, status: str, role: str | None, staff_disabled: bool,
+) -> None:
+    _, username, password = add_login_account(auth.engine, role=role, status=status, staff_disabled=staff_disabled)
+    if outcome == "unknown_account":
+        username = f"missing-{uuid4().hex}"
+    if outcome == "invalid_password":
+        password = secrets.token_urlsafe(24)
+    response = auth.client.post(f"{AUTH}/admin/login", json={"username": username, "password": password})
+    assert_error(response, 401, "INVALID_CREDENTIALS")
+    assert response.json()["error"] == {"code": "INVALID_CREDENTIALS", "message": "用户名或密码错误", "details": {}}
+    assert response.headers["Cache-Control"] == "no-store"
+    assert username not in response.text and password not in response.text
+    with Session(auth.engine) as db:
+        row = db.scalars(select(OperationLog).where(OperationLog.request_id == response.headers["X-Request-ID"])).one()
+        assert row.actor_account_id is None and row.actor_role == "anonymous"
+        assert row.summary == outcome and row.after_data == {"channel": "admin_web"}
+
+
+def test_login_rate_limit_blocks_even_valid_credentials(auth: AuthFixture) -> None:
+    _, username, password = add_login_account(auth.engine, role="admin")
+    for _ in range(PAIR_LIMIT):
+        response = auth.client.post(f"{AUTH}/admin/login", json={"username": username, "password": "wrong"})
+        assert_error(response, 401, "INVALID_CREDENTIALS")
+    response = auth.client.post(
+        f"{AUTH}/admin/login", json={"username": username, "password": password},
+        headers={"X-Forwarded-For": "192.0.2.41"},
+    )
+    assert_error(response, 429, "LOGIN_RATE_LIMITED")
+    assert 0 < int(response.headers["Retry-After"]) <= 300
+    with Session(auth.engine) as db:
+        row = db.scalars(select(OperationLog).where(OperationLog.request_id == response.headers["X-Request-ID"])).one()
+        assert row.summary == "rate_limited" and row.actor_account_id is None
+
+    source = uuid4().hex
+    for attempt in range(SOURCE_LIMIT):
+        assert login_retry_after(auth.service.cache, source, f"user-{attempt}") == 0
+    assert login_retry_after(auth.service.cache, source, "another-user") > 0

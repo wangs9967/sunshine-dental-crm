@@ -8,11 +8,12 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 from starlette.responses import JSONResponse
 
+from app.auth.admin_login import CHANNEL, check_credentials, login_retry_after
 from app.auth.audit import AuthAction, AuthOutcome, write_auth_audit
-from app.auth.identity import Identity, resolve_identity
-from app.auth.sessions import RejectedSession, SessionReference, SessionService, unavailable
+from app.auth.identity import Channel, Identity, resolve_identity
+from app.auth.sessions import RejectedSession, SessionReference, SessionService, TokenPair, unavailable
 from app.db.session import get_db
-from app.http import SuccessEnvelope, success
+from app.http import APIError, SuccessEnvelope, error, success
 
 router = APIRouter(prefix="/api/v1/auth", tags=["auth"])
 bearer = HTTPBearer(auto_error=False)
@@ -31,6 +32,12 @@ Sessions = Annotated[SessionService, Depends(get_sessions)]
 class RefreshRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     refresh_token: SecretStr = Field(max_length=256)
+
+
+class AdminLoginRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    username: str = Field(min_length=1, max_length=64, pattern=r"^[^\x00]+$")
+    password: SecretStr = Field(min_length=1, max_length=256)
 
 
 class SessionPayload(Identity):
@@ -76,12 +83,43 @@ CurrentSession = Annotated[Authenticated, Depends(authenticate)]
 
 
 def audit(
-    db: Session, request: Request, action: AuthAction, outcome: AuthOutcome, identity: Identity | None = None
+    db: Session, request: Request, action: AuthAction, outcome: AuthOutcome, identity: Identity | None = None,
+    *, channel: Channel | None = None,
 ) -> None:
     try:
-        write_auth_audit(db, request.state.request_id, action, outcome, identity)
+        write_auth_audit(db, request.state.request_id, action, outcome, identity, channel=channel)
     except SQLAlchemyError:
         raise unavailable() from None
+
+
+def session_payload(identity: Identity, pair: TokenPair) -> SessionPayload:
+    return SessionPayload(
+        **identity.model_dump(), access_token=pair.access_token,
+        refresh_token=pair.refresh_token, expires_in=pair.expires_in,
+    )
+
+
+@router.post("/admin/login", response_model=SuccessEnvelope[SessionPayload])
+def admin_login(request: Request, body: AdminLoginRequest, service: Sessions, db: Database) -> JSONResponse:
+    try:
+        retry_after = login_retry_after(service.cache, request.client.host if request.client else "", body.username)
+        identity, outcome = (None, "rate_limited") if retry_after else check_credentials(
+            db, body.username, body.password.get_secret_value(),
+        )
+        pair = service.issue(identity.account_id, identity.selected_role, CHANNEL) if identity else None
+    except APIError:
+        db.rollback()
+        audit(db, request, "admin_login", "dependency_unavailable", channel=CHANNEL)
+        raise
+    audit(db, request, "admin_login", outcome, identity, channel=CHANNEL)
+    if retry_after:
+        return error(
+            request, 429, "LOGIN_RATE_LIMITED", "登录尝试过于频繁，请稍后再试",
+            headers={"Retry-After": str(retry_after)},
+        )
+    if identity is None or pair is None:
+        return error(request, 401, "INVALID_CREDENTIALS", "用户名或密码错误")
+    return success(request, session_payload(identity, pair))
 
 
 @router.post("/refresh", response_model=SuccessEnvelope[SessionPayload])
@@ -101,11 +139,7 @@ def refresh_session(request: Request, body: RefreshRequest, service: Sessions, d
         audit(db, request, "refresh", "refresh_replay" if exc.replay else "invalid_session", identity)
         raise
     audit(db, request, "refresh", "success", identity)
-    payload = SessionPayload(
-        **identity.model_dump(), access_token=pair.access_token,
-        refresh_token=pair.refresh_token, expires_in=pair.expires_in,
-    )
-    return success(request, payload)
+    return success(request, session_payload(identity, pair))
 
 
 @router.post("/logout", response_model=SuccessEnvelope[LogoutResult])

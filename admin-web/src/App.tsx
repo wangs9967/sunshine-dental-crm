@@ -1,13 +1,14 @@
 import { lazy, Suspense, useEffect, useState } from 'react';
 import type { MouseEvent } from 'react';
-import { Avatar, Button, ConfigProvider, Dropdown, Layout, Menu, Select, Space } from 'antd';
+import { Alert, Avatar, ConfigProvider, Dropdown, Layout, Menu, Space } from 'antd';
 import zhCN from 'antd/locale/zh_CN';
 import { Brand } from './components/Brand';
 import { NavigationIcon } from './components/NavigationIcon';
 import { ConfirmDialog, ErrorState, LoadingState, PageContainer, PageHeader, StatusTag } from './components/page';
 import { loginReturnPath, menu, relatedRoutes, resolveRoute, routePath } from './routes';
-import { readDemoRole, roles, writeDemoRole } from './session';
-import type { DemoRole } from './session';
+import { AdminLogin, DemoLogin } from './pages/Login';
+import { demoEnabled, readDemoRole, roles, writeDemoRole } from './session';
+import type { AdminRole, AdminSession } from './session';
 import { theme } from './theme';
 import './styles.css';
 
@@ -15,34 +16,15 @@ const WorkspacePage = lazy(() => import('./pages/WorkspacePage'));
 type Navigate = (path: string, event?: MouseEvent<HTMLAnchorElement>) => void;
 export type { Navigate };
 
-function Login({ onLogin }: { onLogin: (role: DemoRole) => void }) {
-  const [role, setRole] = useState<DemoRole>('admin');
-  return (
-    <main className="login">
-      <aside className="login-brand"><Brand login /></aside>
-      <div className="login-card">
-        <h1>登录管理后台</h1>
-        <p>选择演示身份，进入工作台。</p>
-        <form onSubmit={(event) => { event.preventDefault(); onLogin(role); }}>
-          <label htmlFor="demo-role">演示身份</label>
-          <Select id="demo-role" value={role} onChange={setRole} options={[
-            { value: 'admin', label: '管理员' },
-            { value: 'manager', label: '店长' },
-          ]} />
-          <Button type="primary" size="large" htmlType="submit" block>进入后台</Button>
-        </form>
-      </div>
-    </main>
-  );
-}
-
 function AdminLayout({ role, path, navigate, onLogout }: {
-  role: DemoRole;
+  role: AdminRole;
   path: string;
   navigate: Navigate;
-  onLogout: () => void;
+  onLogout: () => Promise<void>;
 }) {
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const [loggingOut, setLoggingOut] = useState(false);
+  const [logoutError, setLogoutError] = useState(false);
   const route = resolveRoute(path);
   const groups = [...new Set(menu.map((item) => item.group))];
   const menuItems = groups.map((group) => ({
@@ -82,8 +64,11 @@ function AdminLayout({ role, path, navigate, onLogout }: {
         <header className="topbar">
           <span className="topbar-title">运营工作台</span>
           <div className="user-area">
-            <StatusTag>演示环境</StatusTag>
-            <Dropdown trigger={['click']} menu={{ items: [{ key: 'logout', label: '退出登录' }], onClick: () => setConfirmOpen(true) }}>
+            {demoEnabled && <StatusTag>演示环境</StatusTag>}
+            <Dropdown trigger={['click']} menu={{ items: [{ key: 'logout', label: '退出登录' }], onClick: () => {
+              setLogoutError(false);
+              setConfirmOpen(true);
+            } }}>
               <button className="user-button" type="button" aria-label={`${roles[role]}账户菜单`}>
                 <Avatar size={32}>{roles[role].slice(0, 1)}</Avatar>
                 <span>{roles[role]}</span><span aria-hidden="true" className="user-chevron">⌄</span>
@@ -107,15 +92,31 @@ function AdminLayout({ role, path, navigate, onLogout }: {
           </PageContainer>
         </main>
       </Layout>
-      <ConfirmDialog open={confirmOpen} title="退出登录" onCancel={() => setConfirmOpen(false)} onConfirm={onLogout}>
-        退出后将返回登录页。
+      <ConfirmDialog open={confirmOpen} title="退出登录" loading={loggingOut}
+        onCancel={() => { if (!loggingOut) setConfirmOpen(false); }}
+        onConfirm={async () => {
+          if (loggingOut) return;
+          setLoggingOut(true);
+          setLogoutError(false);
+          try {
+            await onLogout();
+          } catch {
+            setLogoutError(true);
+          } finally {
+            setLoggingOut(false);
+          }
+        }}>
+        {logoutError ? <Alert showIcon type="error" message="退出失败，请重试。" /> : '退出后将返回登录页。'}
       </ConfirmDialog>
     </Layout>
   );
 }
 
 export default function App() {
-  const [role, setRole] = useState(readDemoRole);
+  const [demoRole, setDemoRole] = useState(readDemoRole);
+  const [session, setSession] = useState<AdminSession>();
+  const [notice, setNotice] = useState('');
+  const role = demoEnabled ? demoRole : session?.role;
   function currentUrl() {
     if (typeof window === 'undefined') return '/login';
     const { pathname, search, hash } = window.location;
@@ -142,6 +143,30 @@ export default function App() {
     }
   }, [path, role, url]);
 
+  useEffect(() => {
+    if (!session) return;
+    let active = true;
+    let timer: number;
+    function schedule(current: AdminSession) {
+      timer = window.setTimeout(async () => {
+        try {
+          await current.refresh();
+          if (active) schedule(current);
+        } catch {
+          if (active) {
+            setSession(undefined);
+            setNotice('当前会话已结束，请重新登录。');
+          }
+        }
+      }, current.refreshInMs);
+    }
+    schedule(session);
+    return () => {
+      active = false;
+      window.clearTimeout(timer);
+    };
+  }, [session]);
+
   const navigate: Navigate = (url, event) => {
     if (event) {
       if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
@@ -153,17 +178,19 @@ export default function App() {
 
   return (
     <ConfigProvider locale={zhCN} theme={theme}>
-      {role ? <AdminLayout role={role} path={path} navigate={navigate} onLogout={() => {
+      {role ? <AdminLayout role={role} path={path} navigate={navigate} onLogout={async () => {
+        if (session) await session.logout();
         writeDemoRole();
-        setRole(undefined);
+        setDemoRole(undefined);
+        setSession(undefined);
         window.history.replaceState(null, '', '/login');
         setUrl('/login');
-      }} /> : <Login onLogin={(selected) => {
+      }} /> : demoEnabled ? <DemoLogin onLogin={(selected) => {
         writeDemoRole(selected);
-        setRole(selected);
-        const target = loginReturnPath(new URLSearchParams(window.location.search).get('next'));
-        window.history.replaceState(null, '', target);
-        setUrl(target);
+        setDemoRole(selected);
+      }} /> : <AdminLogin notice={notice} onLogin={(authenticated) => {
+        setNotice('');
+        setSession(authenticated);
       }} />}
     </ConfigProvider>
   );

@@ -35,6 +35,10 @@ uv run --locked --extra dev pytest
 Remove-Item Env:SUNSHINE_TEST_AUTH
 ```
 
+管理后台默认使用账号密码登录。Vite 开发服务与生产构建预览将同源 `/api` 请求转发至本地 FastAPI，默认目标为 `http://127.0.0.1:18081`，可在启动前通过 `ADMIN_API_PROXY_TARGET` 指定。仅在 Vite 开发服务中设置 `VITE_ADMIN_DEMO=true` 可启用演示，生产构建始终使用真实登录。
+
+后台的访问与刷新令牌只保存在当前页面内存，重新加载页面后需重新登录。首次管理员开通流程待业务确认，认证集成测试使用隔离数据库内的临时账号。
+
 ## React 管理后台
 
 从仓库根目录打开另一终端。

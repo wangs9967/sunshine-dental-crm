@@ -61,15 +61,17 @@ export function ErrorState({ title }: { title: string }) {
   return <Alert type="error" showIcon message={title} />;
 }
 
-export function ConfirmDialog({ open, onConfirm, onCancel, title, children }: {
+export function ConfirmDialog({ open, onConfirm, onCancel, title, children, loading }: {
   open: boolean;
   onConfirm: () => void;
   onCancel: () => void;
   title: string;
   children: ReactNode;
+  loading?: boolean;
 }) {
   return (
-    <Modal open={open} onOk={onConfirm} onCancel={onCancel} title={title} okText="确认" cancelText="取消">
+    <Modal open={open} onOk={onConfirm} onCancel={onCancel} title={title} okText="确认" cancelText="取消"
+      confirmLoading={loading}>
       {children}
     </Modal>
   );

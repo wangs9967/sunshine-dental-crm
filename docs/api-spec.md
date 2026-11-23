@@ -43,7 +43,7 @@
 | 方法与路径 | 权限组 | 请求和响应 |
 |---|---|---|
 | POST /auth/wechat/login | 公开 | code 必填，可由入口携带 scene_token。服务端换取微信身份，返回 Session；注册和绑定流程继续使用有效 scene_token。 |
-| POST /auth/admin/login | 公开 | username、password，返回店长或管理员 Session。 |
+| POST /auth/admin/login | 公开 | username、password。验证启用账号及在职店长或管理员档案，通过后返回 Session。凭据或资格校验失败统一返回 401 INVALID_CREDENTIALS。限流返回 429 LOGIN_RATE_LIMITED 和 Retry-After。 |
 | POST /auth/refresh | 持有效刷新会话 | refresh_token，轮换令牌并返回 Session。 |
 | POST /auth/logout | 已认证 | 撤销当前会话，返回 logged_out。 |
 | GET /auth/me | 已认证 | account_id、selected_role、available_roles、registration_required。角色切换必须经服务端重新授权；员工开通与登录方式按评审门槛开通。 |
@@ -62,6 +62,8 @@
 访问令牌和刷新令牌均为不透明随机值。访问令牌默认有效 600 秒，会话自初次签发起最多有效 604800 秒，刷新不延长会话总期限。刷新成功会同时替换两个令牌。已使用的刷新令牌再次提交会撤销整个会话，并写入脱敏审计。客户端应确保同一会话同时只有一个刷新请求。退出撤销整个会话。
 
 授权依据为账号、当前档案、选定角色和会话渠道。注册前会话使用 `selected_role: null`、`available_roles: []`、`registration_required: true`。后续业务接口仍需单独声明所需权限或档案。
+
+后台登录限流使用 300 秒窗口，每来源最多 30 次，同一来源和用户名组合最多 5 次。后台认证审计保留渠道、结果和 Request ID，登录成功记录账号与角色，失败以匿名记录原因。
 | GET /members/me/exchange-orders | R2 | 本人 Order 列表，筛选 status。 |
 | GET /products、GET /products/{id} | R2 | 已上架商品列表或详情；列表筛选 category、q。 |
 | POST /exchange-orders | R4 | product_id、quantity 和幂等键；返回本人 Order。成本、库存、额度由服务端计算。 |
