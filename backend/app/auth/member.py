@@ -11,7 +11,7 @@ from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
 from app.auth.identity import Identity, resolve_identity
-from app.auth.phone import protect_phone
+from app.auth.phone import mask_phone, protect_phone, read_masked_phone
 from app.config import AuthSettings
 from app.db.models import (
     Account, CustomerAssignment, CustomerStatus, EmployeeQrToken, Member, OperationLog, PointsAccount, StaffProfile,
@@ -56,6 +56,20 @@ class MemberView(BaseModel):
     phone_masked: str
     status: str
     registered_at: datetime
+
+    @classmethod
+    def from_member(cls, member: Member, phone_masked: str) -> "MemberView":
+        return cls(
+            id=member.id, member_no=member.member_no, name=member.name, birthday=member.birthday,
+            phone_masked=phone_masked, status=member.status, registered_at=member.registered_at.astimezone(UTC),
+        )
+
+
+def read_member(db: Session, account_id: UUID, settings: AuthSettings) -> MemberView:
+    member = db.scalar(select(Member).where(Member.account_id == account_id, Member.status == "active"))
+    if member is None:
+        raise APIError(404, "NOT_FOUND", "会员资料不存在")
+    return MemberView.from_member(member, read_masked_phone(member.phone_ciphertext, settings))
 
 
 def login_identity(db: Session, openid: str) -> Identity:
@@ -124,7 +138,4 @@ def register_member(
             member_id=member.id, staff_id=staff_id, bind_source="employee_qr", operator_account_id=account_id,
         ))
     db.flush()
-    return MemberView(
-        id=member.id, member_no=member.member_no, name=member.name, birthday=member.birthday,
-        phone_masked=f"{phone[:3]}****{phone[-4:]}", status=member.status, registered_at=member.registered_at,
-    ), source
+    return MemberView.from_member(member, mask_phone(phone)), source

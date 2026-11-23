@@ -13,6 +13,16 @@ type Registration = { name: string; birthday: string; phone: string };
 type RegistrationResult = { session: Session; source_status: 'none' | 'bound' | 'invalid' };
 type Points = { balance: string };
 
+export type MemberProfile = {
+  id: string;
+  member_no: string;
+  name: string;
+  birthday: string;
+  phone_masked: string;
+  status: string;
+  registered_at: string;
+};
+
 export class RequestError extends Error {
   constructor(readonly status: number, readonly code: string, message: string) {
     super(message);
@@ -81,8 +91,14 @@ async function authorized<T>(path: string, method: 'GET' | 'POST', data?: Wechat
         throw cause;
       }
     }
-    if (!session) throw new RequestError(401, 'INVALID_SESSION', '请重新微信登录。');
-    return request<T>(path, method, data, session.access_token);
+    const renewed = session;
+    if (!renewed) throw new RequestError(401, 'INVALID_SESSION', '请重新微信登录。');
+    try {
+      return await request<T>(path, method, data, renewed.access_token);
+    } catch (cause) {
+      if (cause instanceof RequestError && cause.status === 401 && session === renewed) session = undefined;
+      throw cause;
+    }
   }
 }
 
@@ -105,6 +121,10 @@ export async function submitRegistration(form: Registration): Promise<Registrati
 
 export async function loadPoints(): Promise<string> {
   return (await authorized<Points>('/members/me/points', 'GET')).balance;
+}
+
+export function loadMemberProfile(): Promise<MemberProfile> {
+  return authorized<MemberProfile>('/members/me', 'GET');
 }
 
 export async function logoutMember(): Promise<void> {

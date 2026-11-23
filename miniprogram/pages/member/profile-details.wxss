@@ -1,0 +1,6 @@
+@import "../../components/workspace/workspace.wxss";
+
+.profile-message { margin-bottom: 24rpx; }
+.profile-row { justify-content: space-between; align-items: flex-start; gap: 24rpx; }
+.profile-row text:first-child { flex-shrink: 0; }
+.profile-row text:last-child { text-align: right; word-break: break-all; }

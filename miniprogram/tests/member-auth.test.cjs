@@ -123,3 +123,57 @@ test('points come from the API and logout revokes the session before returning t
   assert.equal(env.session.memberState(), undefined);
   assert.equal(env.routes.at(-1), '/pages/auth/index');
 });
+
+const memberProfile = {
+  id: 'fixture-id', member_no: 'fixture-member-no', name: '测试会员',
+  birthday: '2000-04-05', phone_masked: '199****0000', status: 'active',
+  registered_at: '2026-11-23T01:00:00Z',
+};
+
+test('profile shows loading then reads the current member details with Bearer auth', async () => {
+  const env = harness([{ data: realSession }, { data: memberProfile }]);
+  await env.page('pages/auth/index.ts').login();
+  const page = env.page('pages/member/profile-details.ts');
+  const loading = page.onLoad();
+  assert.equal(page.data.loading, true);
+  await loading;
+  assert.equal(page.data.loading, false);
+  assert.deepEqual(page.data.profile, memberProfile);
+  assert.match(env.requests[1].url, /\/api\/v1\/members\/me$/);
+  assert.equal(env.requests[1].method, 'GET');
+  assert.equal(env.requests[1].header.Authorization, 'Bearer fixture-access');
+});
+
+test('profile shows a network error, then recovers on retry', async () => {
+  const env = harness([{ data: realSession }, { offline: true }, { data: memberProfile }]);
+  await env.page('pages/auth/index.ts').login();
+  const page = env.page('pages/member/profile-details.ts');
+  await page.onLoad();
+  assert.match(page.data.error, /网络连接失败/);
+  assert.equal(page.data.profile, null);
+  await page.loadProfile();
+  assert.equal(page.data.error, '');
+  assert.deepEqual(page.data.profile, memberProfile);
+});
+
+test('profile prompts for login when the existing session and refresh are rejected', async () => {
+  const denied = { status: 401, error: { code: 'INVALID_SESSION', message: '会话已失效' } };
+  const env = harness([{ data: realSession }, denied, denied]);
+  await env.page('pages/auth/index.ts').login();
+  const page = env.page('pages/member/profile-details.ts');
+  await page.onLoad();
+  assert.equal(page.data.expired, true);
+  assert.equal(page.data.profile, null);
+  assert.equal(env.session.memberState(), undefined);
+  assert.match(env.requests[2].url, /\/api\/v1\/auth\/refresh$/);
+  page.returnToLogin();
+  assert.equal(env.routes.at(-1), '/pages/auth/index');
+});
+
+test('profile does not request member data from a page opened without a member session', async () => {
+  const env = harness([]);
+  const page = env.page('pages/member/profile-details.ts');
+  await page.onLoad();
+  assert.equal(page.data.expired, true);
+  assert.equal(env.requests.length, 0);
+});

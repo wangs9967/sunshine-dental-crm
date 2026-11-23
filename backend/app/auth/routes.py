@@ -12,7 +12,7 @@ from starlette.responses import JSONResponse
 from app.auth.admin_login import CHANNEL, check_credentials, login_retry_after
 from app.auth.audit import AuthAction, AuthOutcome, write_auth_audit
 from app.auth.identity import Channel, Identity, resolve_identity
-from app.auth.member import MemberView, RegisterRequest, SourceStatus, login_identity, register_member
+from app.auth.member import MemberView, RegisterRequest, SourceStatus, login_identity, read_member, register_member
 from app.auth.sessions import RejectedSession, SessionReference, SessionService, TokenPair, unavailable
 from app.auth.wechat import exchange_code
 from app.config import AuthSettings
@@ -167,6 +167,13 @@ def register(request: Request, body: RegisterRequest, credentials: Credentials, 
         raise APIError(503, "MEMBER_REGISTRATION_UNAVAILABLE", "注册暂不可用，请稍后重试") from None
     payload = RegistrationPayload(**member.model_dump(), source_status=source, session=session_payload(identity, pair))
     return success(request, payload, status=201)
+
+
+@members_router.get("/me", response_model=SuccessEnvelope[MemberView])
+def my_profile(request: Request, db: Database, session: CurrentSession, settings: Settings) -> JSONResponse:
+    if session.identity.selected_role != "member" or session.reference.record.channel != "miniprogram":
+        raise APIError(403, "FORBIDDEN", "当前身份不能查看会员资料")
+    return success(request, read_member(db, session.identity.account_id, settings))
 
 
 @members_router.get("/me/points", response_model=SuccessEnvelope[PointsView])

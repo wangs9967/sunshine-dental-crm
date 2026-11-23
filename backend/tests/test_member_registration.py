@@ -21,6 +21,7 @@ from test_auth import AUTH, AuthFixture, assert_error, auth, auth_infrastructure
 FORM = {"name": "测试会员", "birthday": "2000-01-01", "phone": "19900000000"}
 REGISTER = "/api/v1/members/register"
 POINTS = "/api/v1/members/me/points"
+PROFILE = "/api/v1/members/me"
 
 
 @pytest.fixture
@@ -216,3 +217,48 @@ def test_concurrent_registration_creates_one_member(auth: AuthFixture, wechat: d
     with ThreadPoolExecutor(max_workers=2) as pool:
         requests = [pool.submit(register, auth, session) for _ in range(2)]
         assert sorted(request.result(timeout=10).status_code for request in requests) == [201, 409]
+
+
+def test_member_profile_returns_only_own_masked_details(auth: AuthFixture, wechat: dict[str, object]) -> None:
+    signup = login(auth)
+    first = register(auth, signup).json()["data"]
+    wechat["openid"] = f"test-{uuid4().hex}"
+    other_signup = login(auth)
+    other = register(auth, other_signup).json()["data"]
+
+    response = auth.client.get(
+        PROFILE, params={"account_id": other_signup["account_id"], "member_id": other["id"]},
+        headers=bearer(first["session"]["access_token"]),
+    )
+    assert response.status_code == 200
+    assert response.headers["Cache-Control"] == "no-store"
+    assert response.json()["data"] == {
+        "id": first["id"], "member_no": first["member_no"], "name": FORM["name"], "birthday": FORM["birthday"],
+        "phone_masked": "199****0000", "status": "active", "registered_at": first["registered_at"],
+    }
+    assert FORM["phone"] not in response.text and other["id"] not in response.text
+    other_response = auth.client.get(PROFILE, headers=bearer(other["session"]["access_token"]))
+    assert other_response.json()["data"]["id"] == other["id"]
+    assert_error(auth.client.patch(PROFILE, headers=bearer(first["session"]["access_token"])),
+                 405, "METHOD_NOT_ALLOWED")
+
+
+def test_member_profile_rejects_other_sessions(auth: AuthFixture, wechat: dict[str, object]) -> None:
+    assert_error(auth.client.get(PROFILE), 401, "INVALID_SESSION")
+    assert_error(auth.client.get(PROFILE, headers=bearer(auth.tokens.access_token)), 403, "FORBIDDEN")
+    signup = login(auth)
+    assert_error(auth.client.get(PROFILE, headers=bearer(signup["access_token"])), 403, "FORBIDDEN")
+    session = register(auth, signup).json()["data"]["session"]
+    headers = bearer(session["access_token"])
+    assert auth.client.post(f"{AUTH}/logout", headers=headers).is_success
+    assert_error(auth.client.get(PROFILE, headers=headers), 401, "INVALID_SESSION")
+
+
+def test_member_profile_masks_or_fails_closed_on_unreadable_phone(auth: AuthFixture, wechat: dict[str, object]) -> None:
+    member = register(auth, login(auth)).json()["data"]
+    with Session(auth.engine) as db:
+        db.get_one(Member, UUID(member["id"])).phone_ciphertext = b"\x01" + b"tampered"
+        db.commit()
+    response = auth.client.get(PROFILE, headers=bearer(member["session"]["access_token"]))
+    assert_error(response, 503, "PHONE_PROTECTION_UNAVAILABLE")
+    assert "tampered" not in response.text
