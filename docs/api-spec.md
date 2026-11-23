@@ -54,6 +54,14 @@
 | PATCH /members/me | R3 | 允许字段和手机号验证按业务确认开放。当前冻结为不可提交，开放后返回 Member。 |
 | GET /members/me/points | R2 | 本人 PointsAccount。 |
 | GET /members/me/points-records | R2 | 本人 PointsRecord 列表，筛选 record_type。 |
+
+### 会话基础设施
+
+服务端生成 `X-Request-ID`，与 JSON 中的 `request_id` 一致。认证响应使用 `Cache-Control: no-store`。无效会话返回 `401 INVALID_SESSION`，认证依赖不可用返回 `503 AUTH_UNAVAILABLE`。
+
+访问令牌和刷新令牌均为不透明随机值。访问令牌默认有效 600 秒，会话自初次签发起最多有效 604800 秒，刷新不延长会话总期限。刷新成功会同时替换两个令牌。已使用的刷新令牌再次提交会撤销整个会话，并写入脱敏审计。客户端应确保同一会话同时只有一个刷新请求。退出撤销整个会话。
+
+授权依据为账号、当前档案、选定角色和会话渠道。注册前会话使用 `selected_role: null`、`available_roles: []`、`registration_required: true`。后续业务接口仍需单独声明所需权限或档案。
 | GET /members/me/exchange-orders | R2 | 本人 Order 列表，筛选 status。 |
 | GET /products、GET /products/{id} | R2 | 已上架商品列表或详情；列表筛选 category、q。 |
 | POST /exchange-orders | R4 | product_id、quantity 和幂等键；返回本人 Order。成本、库存、额度由服务端计算。 |

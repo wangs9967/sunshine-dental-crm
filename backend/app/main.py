@@ -1,4 +1,39 @@
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
-app=FastAPI(title='阳光口腔会员运营管理系统 API',version='0.1.0')
-@app.get('/health')
-def health(): return {'status':'ok'}
+from redis import Redis
+
+from app.auth.routes import router
+from app.auth.sessions import SessionService
+from app.config import AuthSettings
+from app.db.session import database_engine
+from app.http import install_http_handlers
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+    settings = AuthSettings()
+    with Redis(
+        host=settings.redis_host, port=settings.redis_port, db=settings.redis_db,
+        password=settings.redis_password.get_secret_value() if settings.redis_password else None,
+        socket_connect_timeout=2, socket_timeout=2, decode_responses=True,
+    ) as cache:
+        app.state.auth_sessions = SessionService(cache, settings)
+        try:
+            yield
+        finally:
+            del app.state.auth_sessions
+            if database_engine.cache_info().currsize:
+                database_engine().dispose()
+                database_engine.cache_clear()
+
+
+app = FastAPI(title="阳光口腔会员运营管理系统 API", version="0.1.0", lifespan=lifespan)
+install_http_handlers(app)
+app.include_router(router)
+
+
+@app.get("/health")
+def health() -> dict[str, str]:
+    return {"status": "ok"}

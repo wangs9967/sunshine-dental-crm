@@ -27,6 +27,14 @@ uv run --locked uvicorn app.main:app --reload --host 127.0.0.1 --port 18081
 
 `uv sync` 在 `backend/.venv` 安装锁定依赖。连接检查通过实际 SQL 查询和 Redis `PING` 验证依赖服务。另开终端访问 `http://127.0.0.1:18081/health`，预期返回 `{"status":"ok"}`。该端点验证 FastAPI 进程，外部依赖使用前述连接命令检查。空白本地库的初始化、后续升级与回滚见[数据库迁移说明](database-migrations.md)。
 
+认证集成测试使用 Docker 启动临时 PostgreSQL 16 和 Redis 7。测试在 backend 目录执行，结束后容器自动清理。
+
+```powershell
+$env:SUNSHINE_TEST_AUTH = "1"
+uv run --locked --extra dev pytest
+Remove-Item Env:SUNSHINE_TEST_AUTH
+```
+
 ## React 管理后台
 
 从仓库根目录打开另一终端。
