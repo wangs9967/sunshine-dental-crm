@@ -6,7 +6,7 @@
   <view class="entry-panel">
     <view class="entry-description">新会员登录后填写会员资料。</view>
     <view wx:if="{{error}}" class="entry-error" role="alert">{{error}}</view>
-    <t-button theme="primary" block loading="{{opening}}" disabled="{{opening}}" bind:tap="login">微信登录</t-button>
+    <t-button theme="primary" block loading="{{opening}}" disabled="{{opening}}" bind:tap="login">{{opening ? '正在验证微信身份' : '微信登录'}}</t-button>
   </view>
   <view wx:if="{{demoAvailable}}" class="entry-panel">
     <view class="entry-note">演示入口 · 无需微信认证</view>

@@ -32,6 +32,29 @@ export class RequestError extends Error {
 let session: Session | undefined;
 let sceneToken: string | undefined;
 let refresh: Promise<Session> | undefined;
+const restorePreference = 'sunshine-member-restore';
+
+export function shouldRestoreMember(): boolean {
+  try {
+    return wx.getStorageSync(restorePreference) === true;
+  } catch {
+    return false;
+  }
+}
+
+function rememberMemberLogin(enabled: boolean) {
+  try {
+    if (enabled) wx.setStorageSync(restorePreference, true);
+    else wx.removeStorageSync(restorePreference);
+  } catch {
+    // Storage is optional. The current authenticated session remains in memory.
+  }
+}
+
+function clearSession() {
+  session = undefined;
+  rememberMemberLogin(false);
+}
 
 export function rememberScene(value?: string) {
   if (!value || session?.selected_role === 'member') return;
@@ -87,7 +110,7 @@ async function authorized<T>(path: string, method: 'GET' | 'POST', data?: Wechat
       try {
         await refresh;
       } catch (cause) {
-        if (cause instanceof RequestError && cause.status === 401 && session === active) session = undefined;
+        if (cause instanceof RequestError && cause.status === 401 && session === active) clearSession();
         throw cause;
       }
     }
@@ -96,7 +119,7 @@ async function authorized<T>(path: string, method: 'GET' | 'POST', data?: Wechat
     try {
       return await request<T>(path, method, data, renewed.access_token);
     } catch (cause) {
-      if (cause instanceof RequestError && cause.status === 401 && session === renewed) session = undefined;
+      if (cause instanceof RequestError && cause.status === 401 && session === renewed) clearSession();
       throw cause;
     }
   }
@@ -108,6 +131,7 @@ export async function loginWithWechat(): Promise<string> {
     fail: () => reject(new Error('微信登录失败，请重试。')),
   }));
   session = await request<Session>('/auth/wechat/login', 'POST', { code, scene_token: sceneToken });
+  rememberMemberLogin(session.selected_role === 'member' && !session.registration_required);
   if (!session.registration_required) sceneToken = undefined;
   return session.registration_required ? memberRegistrationRoute : workspacePath('member');
 }
@@ -115,6 +139,7 @@ export async function loginWithWechat(): Promise<string> {
 export async function submitRegistration(form: Registration): Promise<RegistrationResult['source_status']> {
   const result = await authorized<RegistrationResult>('/members/register', 'POST', { ...form, scene_token: sceneToken });
   session = result.session;
+  rememberMemberLogin(true);
   sceneToken = undefined;
   return result.source_status;
 }
@@ -133,7 +158,7 @@ export async function logoutMember(): Promise<void> {
   } catch (error) {
     if (!(error instanceof RequestError) || error.status !== 401) throw error;
   }
-  session = undefined;
+  clearSession();
   sceneToken = undefined;
 }
 

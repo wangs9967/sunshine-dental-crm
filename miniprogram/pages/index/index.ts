@@ -1,10 +1,14 @@
 import { entryRoute } from '../../config/navigation';
+import { shouldRestoreMember } from '../../services/member-session';
 
 Page({
   onLoad() {
-    wx.redirectTo({ url: entryRoute });
+    this.openEntry();
   },
   retry() {
-    wx.redirectTo({ url: entryRoute });
+    this.openEntry();
+  },
+  openEntry() {
+    wx.redirectTo({ url: shouldRestoreMember() ? `${entryRoute}?restore=1` : entryRoute });
   },
 });

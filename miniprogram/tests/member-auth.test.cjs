@@ -12,7 +12,7 @@ const realSession = {
 };
 const signup = { ...realSession, selected_role: null, registration_required: true };
 
-function harness(responses) {
+function harness(responses, storage = new Map()) {
   const routes = [];
   const requests = [];
   const modals = [];
@@ -22,6 +22,9 @@ function harness(responses) {
     wx: {
       getAccountInfoSync: () => ({ miniProgram: { envVersion: 'develop' } }),
       login: (options) => options.success({ code: 'fixture-code' }),
+      getStorageSync: (key) => storage.get(key),
+      setStorageSync: (key, value) => storage.set(key, value),
+      removeStorageSync: (key) => storage.delete(key),
       request: (request) => {
         requests.push(request);
         const result = responses.shift();
@@ -33,6 +36,7 @@ function harness(responses) {
         });
       },
       reLaunch: ({ url, success }) => { routes.push(url); success?.(); },
+      redirectTo: ({ url }) => routes.push(url),
       showToast: () => {},
       showModal: ({ content, complete }) => { modals.push(content); complete(); },
     },
@@ -59,7 +63,7 @@ function harness(responses) {
     return instance;
   }
 
-  return { page, routes, requests, modals, session: load(path.join(root, 'services/member-session.ts')) };
+  return { page, routes, requests, modals, storage, session: load(path.join(root, 'services/member-session.ts')) };
 }
 
 test('registered login sends only the wx.login code and opens member home', async () => {
@@ -176,4 +180,39 @@ test('profile does not request member data from a page opened without a member s
   await page.onLoad();
   assert.equal(page.data.expired, true);
   assert.equal(env.requests.length, 0);
+});
+
+test('cold startup gets a fresh WeChat code without persisting session tokens', async () => {
+  const initial = harness([{ data: realSession }]);
+  await initial.page('pages/auth/index.ts').login();
+  assert.deepEqual([...initial.storage.values()], [true]);
+
+  const cold = harness([{ data: realSession }, { data: { logged_out: true } }], initial.storage);
+  assert.equal(cold.session.memberState(), undefined);
+  cold.page('pages/index/index.ts').onLoad();
+  assert.equal(cold.routes.at(-1), '/pages/auth/index?restore=1');
+  await cold.page('pages/auth/index.ts').onLoad({ restore: '1' });
+  assert.equal(cold.requests[0].data.code, 'fixture-code');
+  assert.equal(cold.requests[0].header.Authorization, undefined);
+  assert.equal(cold.routes.at(-1), '/pages/member/home');
+  await cold.session.logoutMember();
+  const signedOut = harness([], cold.storage);
+  signedOut.page('pages/index/index.ts').onLoad();
+  await signedOut.page('pages/auth/index.ts').onLoad({ restore: '1' });
+  assert.equal(signedOut.routes.at(-1), '/pages/auth/index');
+  assert.equal(signedOut.requests.length, 0);
+});
+
+test('cold startup with an unavailable API remains on login and allows retry', async () => {
+  const initial = harness([{ data: realSession }]);
+  await initial.page('pages/auth/index.ts').login();
+  const cold = harness([{ offline: true }, { data: realSession }], initial.storage);
+  const entry = cold.page('pages/auth/index.ts');
+  await entry.onLoad({ restore: '1' });
+  assert.match(entry.data.error, /网络连接失败/);
+  assert.equal(entry.data.opening, false);
+  assert.equal(cold.session.memberState(), undefined);
+  assert.deepEqual(cold.routes, []);
+  await entry.login();
+  assert.equal(cold.routes.at(-1), '/pages/member/home');
 });
