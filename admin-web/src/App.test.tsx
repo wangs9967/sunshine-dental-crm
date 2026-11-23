@@ -1,7 +1,7 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { expect, test } from 'vitest';
 import App from './App';
-import { menu, resolveRoute } from './routes';
+import { loginReturnPath, menu, relatedRoutes, resolveRoute } from './routes';
 import { isDemoRole } from './session';
 
 test('renders the demo login without a session', () => {
@@ -26,4 +26,18 @@ test('only manager and admin identities can start a demo session', () => {
   expect(isDemoRole('admin')).toBe(true);
   expect(isDemoRole('employee')).toBe(false);
   expect(isDemoRole(null)).toBe(false);
+});
+
+test('each linked secondary page resolves to its owning menu', () => {
+  for (const [parent, links] of Object.entries(relatedRoutes)) {
+    for (const link of links) expect(resolveRoute(link.path)?.entry.path).toBe(parent);
+  }
+});
+
+test('returns to a known local deep link with its query and hash after demo sign-in', () => {
+  expect(loginReturnPath('/members/demo-member/?tab=summary#notes')).toBe('/members/demo-member/?tab=summary#notes');
+  expect(resolveRoute('/members/demo-member/?tab=summary#notes')?.title).toBe('会员详情');
+  for (const path of ['//example.org/members', '/\\example.org/members', 'https://example.org', '/login', '/missing', null]) {
+    expect(loginReturnPath(path)).toBe('/dashboard');
+  }
 });

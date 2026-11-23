@@ -1,24 +1,25 @@
-<view class="workspace">
+<view class="workspace {{tabs.length ? 'workspace-with-tabs' : ''}}">
   <block wx:if="{{permitted}}">
     <view class="workspace-hero">
       <text class="workspace-role">{{roleLabel}}</text>
       <view class="workspace-title">{{title}}</view>
     </view>
     <view class="workspace-empty" wx:if="{{emptyText}}">{{emptyText}}</view>
-    <view class="workspace-panel">
-      <view class="workspace-heading">服务导航</view>
-      <block wx:for="{{links}}" wx:key="url">
-        <view class="workspace-row workspace-current" wx:if="{{index === current}}">
-          <view><view class="workspace-label">{{item.label}}</view><view class="workspace-detail">{{item.description}}</view></view>
-          <text class="workspace-marker">当前</text>
-        </view>
-        <navigator class="workspace-row" wx:else url="{{item.url}}" open-type="redirect" hover-class="workspace-pressed">
-          <view><view class="workspace-label">{{item.label}}</view><view class="workspace-detail">{{item.description}}</view></view>
-          <text class="workspace-arrow">›</text>
-        </navigator>
+    <view class="workspace-panel" wx:if="{{links.length}}">
+      <view class="workspace-heading">快捷入口</view>
+      <navigator wx:for="{{links}}" wx:key="url" class="workspace-row" url="{{item.url}}" open-type="{{item.mode}}" hover-class="workspace-pressed">
+        <text class="workspace-label">{{item.label}}</text>
+        <text class="workspace-arrow">›</text>
+      </navigator>
+    </view>
+    <t-button wx:if="{{backUrl}}" theme="primary" variant="outline" block bind:tap="returnToParent">返回上一页</t-button>
+    <t-button wx:else theme="primary" variant="outline" block bind:tap="returnToEntry">切换演示身份</t-button>
+    <view wx:if="{{tabs.length}}" class="workspace-tabs" aria-label="{{roleLabel}}导航">
+      <block wx:for="{{tabs}}" wx:key="path">
+        <view wx:if="{{path === item.path}}" class="workspace-tab workspace-current" aria-label="{{item.label}}，当前页面">{{item.label}}</view>
+        <navigator wx:else class="workspace-tab" url="{{item.path}}" open-type="reLaunch" hover-class="workspace-pressed">{{item.label}}</navigator>
       </block>
     </view>
-    <t-button theme="primary" variant="outline" block bind:tap="returnToEntry">切换演示身份</t-button>
   </block>
   <block wx:else>
     <view class="workspace-empty">请先选择此页面所需的演示身份。</view>

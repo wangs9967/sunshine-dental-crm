@@ -1,11 +1,11 @@
 import { lazy, Suspense, useEffect, useState } from 'react';
 import type { MouseEvent } from 'react';
-import { Avatar, Button, ConfigProvider, Dropdown, Layout, Menu, Select } from 'antd';
+import { Avatar, Button, ConfigProvider, Dropdown, Layout, Menu, Select, Space } from 'antd';
 import zhCN from 'antd/locale/zh_CN';
 import { Brand } from './components/Brand';
 import { NavigationIcon } from './components/NavigationIcon';
 import { ConfirmDialog, ErrorState, LoadingState, PageContainer, PageHeader, StatusTag } from './components/page';
-import { menu, relatedRoutes, resolveRoute } from './routes';
+import { loginReturnPath, menu, relatedRoutes, resolveRoute, routePath } from './routes';
 import { readDemoRole, roles, writeDemoRole } from './session';
 import type { DemoRole } from './session';
 import { theme } from './theme';
@@ -55,7 +55,7 @@ function AdminLayout({ role, path, navigate, onLogout }: {
     })),
   }));
   const title = route?.title ?? '页面未找到';
-  const secondary = route && relatedRoutes[path as keyof typeof relatedRoutes];
+  const secondary = route && relatedRoutes[routePath(path)];
 
   function link(url: string, label: string) {
     return <a href={url} onClick={(event) => navigate(url, event)}>{label}</a>;
@@ -92,7 +92,11 @@ function AdminLayout({ role, path, navigate, onLogout }: {
           </div>
         </header>
         <main className="main-area">
-          <PageHeader title={title} parents={parents} actions={secondary && link(secondary.path, secondary.title)} />
+          <PageHeader title={title} parents={parents} actions={secondary && (
+            <Space wrap size={16}>
+              {secondary.map(({ path: url, title: label }) => <span key={url}>{link(url, label)}</span>)}
+            </Space>
+          )} />
           <PageContainer>
             {route ? (
               <Suspense fallback={<LoadingState />}>
@@ -112,31 +116,39 @@ function AdminLayout({ role, path, navigate, onLogout }: {
 
 export default function App() {
   const [role, setRole] = useState(readDemoRole);
-  const [path, setPath] = useState(() => typeof window === 'undefined' ? '/login' : window.location.pathname);
+  function currentUrl() {
+    if (typeof window === 'undefined') return '/login';
+    const { pathname, search, hash } = window.location;
+    return pathname + search + hash;
+  }
+  const [url, setUrl] = useState(currentUrl);
+  const path = routePath(url);
 
   useEffect(() => {
-    const onPopState = () => setPath(window.location.pathname);
+    const onPopState = () => setUrl(currentUrl());
     window.addEventListener('popstate', onPopState);
     return () => window.removeEventListener('popstate', onPopState);
   }, []);
 
   useEffect(() => {
     if (!role && path !== '/login') {
-      window.history.replaceState(null, '', '/login');
-      setPath('/login');
+      const target = path === '/' ? '/login' : `/login?next=${encodeURIComponent(url)}`;
+      window.history.replaceState(null, '', target);
+      setUrl(target);
     } else if (role && (path === '/' || path === '/login')) {
-      window.history.replaceState(null, '', '/dashboard');
-      setPath('/dashboard');
+      const target = loginReturnPath(new URLSearchParams(window.location.search).get('next'));
+      window.history.replaceState(null, '', target);
+      setUrl(target);
     }
-  }, [path, role]);
+  }, [path, role, url]);
 
   const navigate: Navigate = (url, event) => {
     if (event) {
       if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
       event.preventDefault();
     }
-    if (window.location.pathname !== url) window.history.pushState(null, '', url);
-    setPath(url);
+    if (currentUrl() !== url) window.history.pushState(null, '', url);
+    setUrl(url);
   };
 
   return (
@@ -144,11 +156,14 @@ export default function App() {
       {role ? <AdminLayout role={role} path={path} navigate={navigate} onLogout={() => {
         writeDemoRole();
         setRole(undefined);
-        navigate('/login');
+        window.history.replaceState(null, '', '/login');
+        setUrl('/login');
       }} /> : <Login onLogin={(selected) => {
         writeDemoRole(selected);
         setRole(selected);
-        navigate(resolveRoute(path) && path !== '/' ? path : '/dashboard');
+        const target = loginReturnPath(new URLSearchParams(window.location.search).get('next'));
+        window.history.replaceState(null, '', target);
+        setUrl(target);
       }} />}
     </ConfigProvider>
   );

@@ -2,7 +2,8 @@
   "name": "sunshine-dental-miniprogram",
   "private": true,
   "scripts": {
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "node --test tests/navigation.test.cjs"
   },
   "dependencies": {
     "tdesign-miniprogram": "^1.18.0"

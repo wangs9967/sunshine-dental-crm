@@ -1,0 +1,6 @@
+{
+  "navigationBarTitleText": "家访记录",
+  "usingComponents": {
+    "workspace-shell": "/components/workspace/workspace"
+  }
+}

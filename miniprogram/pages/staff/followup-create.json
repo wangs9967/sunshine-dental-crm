@@ -1,0 +1,6 @@
+{
+  "navigationBarTitleText": "跟进记录",
+  "usingComponents": {
+    "workspace-shell": "/components/workspace/workspace"
+  }
+}

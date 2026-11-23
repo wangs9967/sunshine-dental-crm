@@ -30,7 +30,7 @@ const secondaryRoutes = [
 ] as const;
 
 export function resolveRoute(path: string): { entry: MenuEntry; title: string } | undefined {
-  const canonical = path.replace(/\/+$/, '') || '/dashboard';
+  const canonical = routePath(path) === '/' ? '/dashboard' : routePath(path);
   const entry = menu.find((item) => item.path === canonical);
   if (entry) return { entry, title: entry.title };
 
@@ -40,8 +40,27 @@ export function resolveRoute(path: string): { entry: MenuEntry; title: string } 
   return parent && { entry: parent, title: secondary[2] };
 }
 
-export const relatedRoutes = {
-  '/followups': { path: '/tasks', title: '回访提醒' },
-  '/points/accounts': { path: '/points/records', title: '积分流水' },
-  '/mall/verifications': { path: '/mall/verify', title: '凭证核销' },
-} as const;
+export const relatedRoutes: Readonly<Record<string, readonly { path: string; title: string }[]>> = {
+  '/members': [{ path: '/members/demo-member', title: '会员详情示例' }],
+  '/employees': [{ path: '/employees/demo-employee', title: '员工详情示例' }],
+  '/followups': [{ path: '/tasks', title: '回访提醒' }],
+  '/points/accounts': [{ path: '/points/records', title: '积分流水' }],
+  '/mall/products': [
+    { path: '/mall/products/new', title: '新增商品' },
+    { path: '/mall/products/demo-product', title: '商品详情示例' },
+    { path: '/mall/products/demo-product/edit', title: '编辑商品示例' },
+    { path: '/mall/products/demo-product/stock', title: '库存调整示例' },
+  ],
+  '/mall/orders': [{ path: '/mall/orders/demo-order', title: '订单详情示例' }],
+  '/mall/verifications': [{ path: '/mall/verify', title: '凭证核销' }],
+};
+
+export function routePath(url: string): string {
+  return url.split(/[?#]/, 1)[0].replace(/\/+$/, '') || '/';
+}
+
+export function loginReturnPath(target: string | null): string {
+  return target && /^\/(?!\/)/.test(target) && !/[\\\u0000-\u0020]/.test(target) && resolveRoute(target)
+    ? (routePath(target) === '/' ? '/dashboard' : target)
+    : '/dashboard';
+}
