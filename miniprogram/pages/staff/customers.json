@@ -1,6 +1,3 @@
 {
-  "navigationBarTitleText": "客户列表",
-  "usingComponents": {
-    "workspace-shell": "/components/workspace/workspace"
-  }
+  "navigationBarTitleText": "客户列表"
 }

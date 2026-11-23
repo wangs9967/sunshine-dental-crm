@@ -1,30 +1,30 @@
 from datetime import UTC, datetime
-from typing import Annotated, Any
+from typing import Annotated, Any, Literal
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, Query, Request
 from pydantic import BaseModel
-from sqlalchemy import and_, select
+from sqlalchemy import or_, select
 from starlette.responses import JSONResponse
 
 from app.auth.member import MemberView
-from app.auth.phone import read_masked_phone
 from app.auth.routes import Authenticated, Database, MemberSession, Settings, require_permission
-from app.auth.scopes import customer_scope, owned_order
-from app.db.models import CustomerAssignment, CustomerStatus, Member
+from app.auth.scopes import current_customer_assignment, customer_scope, own_customer_scope, owned_order
+from app.db.models import CustomerStatus, Member, StaffProfile
+from app.directory import (
+    AdminMemberView, CustomerView, Page, StaffView, admin_member_detail, count_rows, customer_detail, customer_view,
+    customers, member_search, member_view,
+)
 from app.http import APIError, SuccessEnvelope, success
 
 router = APIRouter(prefix="/api/v1")
 CustomerSession = Annotated[Authenticated, Depends(require_permission("R6"))]
-
-
-class CustomerView(MemberView):
-    visit_status: str
-    consume_status: str
-    deal_status: str
-    last_effective_contact_at: datetime | None
-    next_recall_at: datetime | None
-    current_staff_id: UUID | None
+AdminMemberSession = Annotated[Authenticated, Depends(require_permission("R11"))]
+AdminStaffSession = Annotated[Authenticated, Depends(require_permission("R12"))]
+PageNumber = Annotated[int, Query(ge=1, le=2147483647)]
+PageSize = Annotated[int, Query(ge=1, le=100)]
+SearchText = Annotated[str, Query(max_length=80)]
+ProfileStatus = Literal["active", "disabled"]
 
 
 class OrderView(BaseModel):
@@ -40,28 +40,87 @@ class OrderView(BaseModel):
 
 
 @router.get("/customers/{id}", tags=["customers"], response_model=SuccessEnvelope[CustomerView])
-def customer_detail(
+def read_customer(
     request: Request, id: UUID, db: Database, session: CustomerSession, settings: Settings,
 ) -> JSONResponse:
-    row = db.execute(
-        select(Member, CustomerStatus, CustomerAssignment.staff_id)
-        .join(CustomerStatus, CustomerStatus.member_id == Member.id)
-        .outerjoin(CustomerAssignment, and_(
-            CustomerAssignment.member_id == Member.id, CustomerAssignment.is_current.is_(True),
+    return success(request, customer_detail(db, id, customer_scope(session.identity), settings))
+
+
+@router.get("/staff/me/customers", tags=["customers"], response_model=SuccessEnvelope[Page[CustomerView]])
+def list_staff_customers(
+    request: Request, db: Database, session: CustomerSession, settings: Settings,
+    page: PageNumber = 1, page_size: PageSize = 20, q: SearchText = "",
+    visit_status: Literal["not_visited", "visited"] | None = None,
+    consume_status: Literal["not_consumed", "consumed"] | None = None,
+    deal_status: Literal["not_dealt", "dealt"] | None = None,
+) -> JSONResponse:
+    query = customers().where(own_customer_scope(session.identity))
+    if keyword := q.strip():
+        query = query.where(member_search(keyword, settings))
+    for column, value in (
+        (CustomerStatus.visit_status, visit_status), (CustomerStatus.consume_status, consume_status),
+        (CustomerStatus.deal_status, deal_status),
+    ):
+        if value is not None:
+            query = query.where(column == value)
+    total = count_rows(db, query)
+    rows = db.execute(query.order_by(Member.registered_at.desc(), Member.id.desc()).offset((page - 1) * page_size).limit(page_size))
+    items = [customer_view(member, state, staff_id, settings) for member, state, staff_id in rows]
+    return success(request, Page[CustomerView](items=items, page=page, page_size=page_size, total=total))
+
+
+@router.get("/admin/members", tags=["admin"], response_model=SuccessEnvelope[Page[MemberView]])
+def list_admin_members(
+    request: Request, db: Database, session: AdminMemberSession, settings: Settings,
+    page: PageNumber = 1, page_size: PageSize = 20, q: SearchText = "",
+    status: ProfileStatus | None = None, staff_id: UUID | None = None,
+) -> JSONResponse:
+    query = select(Member)
+    if keyword := q.strip():
+        query = query.where(member_search(keyword, settings))
+    if status is not None:
+        query = query.where(Member.status == status)
+    if staff_id is not None:
+        query = query.where(current_customer_assignment(staff_id))
+    total = count_rows(db, query)
+    rows = db.scalars(query.order_by(Member.registered_at.desc(), Member.id.desc()).offset((page - 1) * page_size).limit(page_size))
+    items = [member_view(member, settings) for member in rows]
+    return success(request, Page[MemberView](items=items, page=page, page_size=page_size, total=total))
+
+
+@router.get("/admin/members/{id}", tags=["admin"], response_model=SuccessEnvelope[AdminMemberView])
+def read_admin_member(request: Request, id: UUID, db: Database, session: AdminMemberSession, settings: Settings) -> JSONResponse:
+    return success(request, admin_member_detail(db, id, settings))
+
+
+@router.get("/admin/staff", tags=["admin"], response_model=SuccessEnvelope[Page[StaffView]])
+def list_admin_staff(
+    request: Request, db: Database, session: AdminStaffSession,
+    page: PageNumber = 1, page_size: PageSize = 20, q: SearchText = "",
+    role: Literal["employee", "manager", "admin"] | None = None, status: ProfileStatus | None = None,
+) -> JSONResponse:
+    query = select(StaffProfile)
+    if keyword := q.strip():
+        query = query.where(or_(
+            StaffProfile.display_name.icontains(keyword, autoescape=True),
+            StaffProfile.employee_no.icontains(keyword, autoescape=True),
         ))
-        .where(Member.id == id, customer_scope(session.identity)),
-    ).one_or_none()
-    if row is None:
-        raise APIError(404, "NOT_FOUND", "客户不存在")
-    member, state, current_staff_id = row
-    profile = MemberView.from_member(member, read_masked_phone(member.phone_ciphertext, settings))
-    return success(request, CustomerView(
-        **profile.model_dump(),
-        visit_status=state.visit_status, consume_status=state.consume_status, deal_status=state.deal_status,
-        last_effective_contact_at=state.last_effective_contact_at.astimezone(UTC) if state.last_effective_contact_at else None,
-        next_recall_at=state.next_recall_at.astimezone(UTC) if state.next_recall_at else None,
-        current_staff_id=current_staff_id,
-    ))
+    if role is not None:
+        query = query.where(StaffProfile.role == role)
+    if status is not None:
+        query = query.where(StaffProfile.status == status)
+    total = count_rows(db, query)
+    rows = db.scalars(query.order_by(StaffProfile.created_at.desc(), StaffProfile.id.desc()).offset((page - 1) * page_size).limit(page_size))
+    items = [StaffView.model_validate(staff) for staff in rows]
+    return success(request, Page[StaffView](items=items, page=page, page_size=page_size, total=total))
+
+
+@router.get("/admin/staff/{id}", tags=["admin"], response_model=SuccessEnvelope[StaffView])
+def read_admin_staff(request: Request, id: UUID, db: Database, session: AdminStaffSession) -> JSONResponse:
+    staff = db.get(StaffProfile, id)
+    if staff is None:
+        raise APIError(404, "NOT_FOUND", "员工档案不存在")
+    return success(request, StaffView.model_validate(staff))
 
 
 @router.get("/exchange-orders/{id}", tags=["exchange-orders"], response_model=SuccessEnvelope[OrderView])

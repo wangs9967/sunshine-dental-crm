@@ -13,14 +13,17 @@ import { theme } from './theme';
 import './styles.css';
 
 const WorkspacePage = lazy(() => import('./pages/WorkspacePage'));
+const DirectoryPage = lazy(() => import('./pages/DirectoryPage'));
 type Navigate = (path: string, event?: MouseEvent<HTMLAnchorElement>) => void;
 export type { Navigate };
 
-function AdminLayout({ role, path, navigate, onLogout }: {
+function AdminLayout({ role, path, navigate, onLogout, session, onExpired }: {
   role: AdminRole;
   path: string;
   navigate: Navigate;
   onLogout: () => Promise<void>;
+  session?: AdminSession;
+  onExpired: () => void;
 }) {
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
@@ -85,8 +88,11 @@ function AdminLayout({ role, path, navigate, onLogout }: {
           <PageContainer>
             {route ? (
               <Suspense fallback={<LoadingState />}>
-                <WorkspacePage key={path} title={title} dashboard={route.entry.path === '/dashboard'}
-                  searchable={route.title === route.entry.title && route.entry.path !== '/settings'} navigate={navigate} />
+                {route.entry.path === '/members' || route.entry.path === '/employees'
+                  ? <DirectoryPage key={path} path={path} base={route.entry.path} session={session}
+                      navigate={navigate} onExpired={onExpired} />
+                  : <WorkspacePage key={path} title={title} dashboard={route.entry.path === '/dashboard'}
+                      searchable={route.title === route.entry.title && route.entry.path !== '/settings'} navigate={navigate} />}
               </Suspense>
             ) : <ErrorState title="该页面不存在，请从左侧菜单选择页面。" />}
           </PageContainer>
@@ -178,7 +184,8 @@ export default function App() {
 
   return (
     <ConfigProvider locale={zhCN} theme={theme}>
-      {role ? <AdminLayout role={role} path={path} navigate={navigate} onLogout={async () => {
+      {role ? <AdminLayout role={role} path={path} navigate={navigate} session={session}
+        onExpired={() => { setSession(undefined); setNotice('当前会话已结束，请重新登录。'); }} onLogout={async () => {
         if (session) await session.logout();
         writeDemoRole();
         setDemoRole(undefined);

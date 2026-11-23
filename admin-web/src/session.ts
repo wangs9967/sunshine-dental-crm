@@ -66,6 +66,15 @@ export function loginErrorMessage(error: unknown): string {
   return error instanceof AuthError ? error.message : '认证服务暂时不可用，请重试。';
 }
 
+export class AdminReadError extends Error {
+  constructor(readonly status: number) {
+    super(status === 401 ? '当前会话已结束，请重新登录。'
+      : status === 403 ? '当前身份没有查看权限。'
+      : status === 404 ? '该资料不存在。'
+      : status === 422 ? '查询条件无效。' : '读取失败，请重试。');
+  }
+}
+
 export class AdminSession {
   #session: SessionData;
   #refreshAt: number;
@@ -105,6 +114,28 @@ export class AdminSession {
 
   async refresh(): Promise<void> {
     if (!this.#loggingOut) await this.rotate();
+  }
+
+  async read<T>(path: string, signal: AbortSignal): Promise<T> {
+    const get = (token: string) => fetch('/api/v1/admin' + path, {
+      cache: 'no-store', credentials: 'omit', redirect: 'error', signal,
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const firstToken = this.#session.access_token;
+    let response = await get(firstToken);
+    if (response.status === 401 && !this.#loggingOut && !signal.aborted) {
+      try {
+        if (this.#session.access_token === firstToken) await this.rotate();
+      } catch (error) {
+        if (error instanceof AuthError) throw new AdminReadError(error.status);
+        throw error;
+      }
+      response = await get(this.#session.access_token);
+    }
+    if (!response.ok) throw new AdminReadError(response.status);
+    const result = await response.json();
+    if (result?.success !== true) throw new AdminReadError(503);
+    return result.data as T;
   }
 
   async logout(): Promise<void> {

@@ -41,8 +41,6 @@ export function resolveRoute(path: string): { entry: MenuEntry; title: string } 
 }
 
 export const relatedRoutes: Readonly<Record<string, readonly { path: string; title: string }[]>> = {
-  '/members': [{ path: '/members/demo-member', title: '会员详情示例' }],
-  '/employees': [{ path: '/employees/demo-employee', title: '员工详情示例' }],
   '/followups': [{ path: '/tasks', title: '回访提醒' }],
   '/points/accounts': [{ path: '/points/records', title: '积分流水' }],
   '/mall/products': [

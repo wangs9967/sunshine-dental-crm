@@ -1,1 +1,47 @@
-<workspace-shell />
+<view class="workspace workspace-with-tabs">
+  <view class="workspace-hero">
+    <text class="workspace-role">员工端</text>
+    <view class="workspace-title">客户列表</view>
+  </view>
+  <view wx:if="{{!loginRequired}}" class="workspace-panel">
+    <view class="customer-search">
+      <input value="{{keyword}}" maxlength="80" placeholder="姓名、会员编号或完整手机号" confirm-type="search"
+        bindinput="changeKeyword" bindconfirm="search" />
+      <t-button size="small" theme="primary" bindtap="search">查询</t-button>
+    </view>
+    <view class="customer-filters">
+      <picker wx:for="{{statuses}}" wx:key="field" range="{{item.labels}}" value="{{selections[index]}}" data-index="{{index}}" bindchange="changeStatus">
+        <view>{{item.labels[selections[index]]}} ▾</view>
+      </picker>
+    </view>
+  </view>
+  <view wx:if="{{loading}}" class="workspace-empty">正在读取客户资料…</view>
+  <view wx:elif="{{error}}" class="workspace-panel">
+    <view class="customer-message">{{error}}</view>
+    <t-button wx:if="{{loginRequired}}" theme="primary" block bindtap="returnToLogin">返回登录</t-button>
+    <t-button wx:else theme="primary" variant="outline" block bindtap="load">重试</t-button>
+  </view>
+  <view wx:elif="{{!customers.length}}" class="workspace-empty">没有符合条件的客户</view>
+  <view wx:else class="workspace-panel">
+    <navigator wx:for="{{customers}}" wx:key="id" class="workspace-row customer-list-row"
+      url="/pages/staff/customer-detail?id={{item.id}}" hover-class="workspace-pressed">
+      <view>
+        <view class="workspace-label">{{item.name}}</view>
+        <view class="customer-meta">{{item.member_no}} · {{item.phone_masked}}</view>
+        <view class="customer-meta">{{item.statuses[0]}} · {{item.statuses[1]}} · {{item.statuses[2]}}</view>
+      </view>
+      <text class="workspace-arrow">›</text>
+    </navigator>
+  </view>
+  <view wx:if="{{!loading && !error && (page > 1 || hasNext)}}" class="customer-pagination">
+    <t-button size="small" variant="outline" disabled="{{page <= 1}}" bindtap="previous">上一页</t-button>
+    <text>第 {{page}} 页</text>
+    <t-button size="small" variant="outline" disabled="{{!hasNext}}" bindtap="next">下一页</t-button>
+  </view>
+  <view class="workspace-tabs" aria-label="员工端导航">
+    <block wx:for="{{tabs}}" wx:key="path">
+      <view wx:if="{{item.path === '/pages/staff/customers'}}" class="workspace-tab workspace-current">{{item.label}}</view>
+      <navigator wx:else class="workspace-tab" url="{{item.path}}" open-type="reLaunch">{{item.label}}</navigator>
+    </block>
+  </view>
+</view>

@@ -13,6 +13,16 @@ from starlette.responses import JSONResponse, Response
 logger = logging.getLogger(__name__)
 
 
+class DirectoryAccessLogFilter(logging.Filter):
+    def filter(self, record: logging.LogRecord) -> bool:
+        args = record.args
+        if isinstance(args, tuple) and len(args) == 5 and isinstance(args[2], str):
+            path, _, _ = args[2].partition("?")
+            if path.rstrip("/") in ("/api/v1/admin/members", "/api/v1/staff/me/customers"):
+                record.args = (*args[:2], path, *args[3:])
+        return True
+
+
 class SuccessEnvelope[T](BaseModel):
     success: bool = True
     data: T
@@ -54,6 +64,10 @@ def error(
 
 
 def install_http_handlers(app: FastAPI) -> None:
+    access_logger = logging.getLogger("uvicorn.access")
+    if not any(isinstance(existing, DirectoryAccessLogFilter) for existing in access_logger.filters):
+        access_logger.addFilter(DirectoryAccessLogFilter())
+
     @app.middleware("http")
     async def request_context(request: Request, call_next: RequestResponseEndpoint) -> Response:
         request.state.request_id = str(uuid4())
@@ -65,7 +79,8 @@ def install_http_handlers(app: FastAPI) -> None:
             response = error(request, 500, "INTERNAL_ERROR", "服务暂时不可用")
         response.headers["X-Request-ID"] = request.state.request_id
         if request.url.path.startswith(
-            ("/api/v1/auth/", "/api/v1/members/", "/api/v1/customers/", "/api/v1/exchange-orders/"),
+            ("/api/v1/auth/", "/api/v1/members/", "/api/v1/customers/", "/api/v1/exchange-orders/",
+             "/api/v1/admin/members", "/api/v1/admin/staff", "/api/v1/staff/me/customers"),
         ):
             response.headers["Cache-Control"] = "no-store"
         return response

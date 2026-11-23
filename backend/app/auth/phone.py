@@ -41,7 +41,15 @@ def protect_phone(phone: str, settings: AuthSettings) -> tuple[bytes, bytes]:
     value = phone.encode("ascii")
     nonce = secrets.token_bytes(NONCE_LENGTH)
     ciphertext = AESGCM(encryption_key).encrypt(nonce, value, PHONE_CONTEXT)
-    return PHONE_VERSION + nonce + ciphertext, hmac.digest(search_key, value, hashlib.sha256)
+    return PHONE_VERSION + nonce + ciphertext, _digest(value, search_key)
+
+
+def _digest(value: bytes, search_key: bytes) -> bytes:
+    return hmac.digest(search_key, value, hashlib.sha256)
+
+
+def phone_search_digest(phone: str, settings: AuthSettings) -> bytes:
+    return _digest(phone.encode("ascii"), _key(settings.phone_lookup_hmac_key))
 
 
 def mask_phone(phone: str) -> str:

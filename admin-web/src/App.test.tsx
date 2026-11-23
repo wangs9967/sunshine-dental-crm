@@ -84,3 +84,27 @@ test('rotates once for concurrent refreshes and calls logout with the latest acc
   expect(fetch.mock.calls[2][1].headers.Authorization).toBe('Bearer access-2');
   expect(setItem).not.toHaveBeenCalled();
 });
+
+test('retries an authenticated directory read with the rotated token and reports denied reads', async () => {
+  const session = (suffix: number) => ({
+    access_token: `access-${suffix}`, refresh_token: `refresh-${suffix}`, selected_role: 'admin', expires_in: 600,
+  });
+  const list = { items: [], page: 1, page_size: 20, total: 0 };
+  const fetch = vi.fn()
+    .mockResolvedValueOnce(Response.json({ success: true, data: session(1) }))
+    .mockResolvedValueOnce(new Response(null, { status: 401 }))
+    .mockResolvedValueOnce(Response.json({ success: true, data: session(2) }))
+    .mockResolvedValueOnce(Response.json({ success: true, data: list }))
+    .mockResolvedValueOnce(new Response(null, { status: 403 }));
+  vi.stubGlobal('fetch', fetch);
+  const client = await AdminSession.login('test-user', 'test-input');
+  const { signal } = new AbortController();
+  await expect(client.read('/members?page=1', signal)).resolves.toEqual(list);
+  await expect(client.read('/staff', signal)).rejects.toMatchObject({ status: 403 });
+  expect(fetch.mock.calls.slice(1).map(([url, init]) => [url, init.headers.Authorization])).toEqual([
+    ['/api/v1/admin/members?page=1', 'Bearer access-1'],
+    ['/api/v1/auth/refresh', undefined],
+    ['/api/v1/admin/members?page=1', 'Bearer access-2'],
+    ['/api/v1/admin/staff', 'Bearer access-2'],
+  ]);
+});

@@ -107,7 +107,7 @@ export const routes: Readonly<Record<string, WorkspaceRoute>> = {
   '/pages/staff/customers': {
     role: 'employee', title: '客户列表',
     links: [
-      { path: '/pages/staff/customer-detail', label: '查看演示客户', id: 'customer' },
+      { path: '/pages/staff/customer-detail', label: '客户详情', id: 'customer' },
     ],
   },
   '/pages/staff/customer-detail': {
@@ -140,10 +140,9 @@ export const routes: Readonly<Record<string, WorkspaceRoute>> = {
   },
 };
 
-const demoIds: Record<Identifier, string> = {
+const demoIds: Partial<Record<Identifier, string>> = {
   product: 'demo-product',
   order: 'demo-order',
-  customer: 'demo-customer',
 };
 
 export function isDemoRole(value: unknown): value is DemoRole {

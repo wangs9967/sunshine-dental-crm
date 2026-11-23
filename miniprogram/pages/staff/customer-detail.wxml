@@ -1,1 +1,22 @@
-<workspace-shell />
+<view class="workspace">
+  <view class="workspace-hero">
+    <text class="workspace-role">员工端</text>
+    <view class="workspace-title">客户详情</view>
+  </view>
+  <view wx:if="{{loading}}" class="workspace-empty">正在读取客户资料…</view>
+  <view wx:elif="{{error}}" class="workspace-panel">
+    <view class="customer-message">{{error}}</view>
+    <t-button wx:if="{{loginRequired}}" theme="primary" block bindtap="returnToLogin">返回登录</t-button>
+    <t-button wx:elif="{{!unavailable}}" theme="primary" variant="outline" block bindtap="load">重试</t-button>
+  </view>
+  <view wx:elif="{{customer}}" class="workspace-panel">
+    <view class="workspace-row"><text>姓名</text><text>{{customer.name}}</text></view>
+    <view class="workspace-row"><text>会员编号</text><text>{{customer.member_no}}</text></view>
+    <view class="workspace-row"><text>生日</text><text>{{customer.birthday}}</text></view>
+    <view class="workspace-row"><text>手机号</text><text>{{customer.phone_masked}}</text></view>
+    <view class="workspace-row"><text>到店状态</text><text>{{customer.statuses[0]}}</text></view>
+    <view class="workspace-row"><text>消费状态</text><text>{{customer.statuses[1]}}</text></view>
+    <view class="workspace-row"><text>成交状态</text><text>{{customer.statuses[2]}}</text></view>
+  </view>
+  <t-button theme="primary" variant="outline" block bindtap="returnToList">返回客户列表</t-button>
+</view>

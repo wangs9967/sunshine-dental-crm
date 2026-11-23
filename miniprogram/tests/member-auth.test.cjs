@@ -63,8 +63,41 @@ function harness(responses, storage = new Map()) {
     return instance;
   }
 
-  return { page, routes, requests, modals, storage, session: load(path.join(root, 'services/member-session.ts')) };
+  return { page, routes, requests, modals, storage, session: load(path.join(root, 'services/member-session.ts')),
+    staff: load(path.join(root, 'services/staff-customers.ts')) };
 }
+
+test('staff list requires a staff session and sends searches and status filters to the API', async () => {
+  const customer = {
+    id: '11111111-1111-1111-1111-111111111111', name: '测试客户', phone_masked: '199****0000',
+    visit_status: 'visited', consume_status: 'not_consumed', deal_status: 'not_dealt',
+  };
+  const pageResult = { items: [customer], page: 1, page_size: 20, total: 1 };
+  const env = harness([{ data: pageResult }, { data: pageResult }, { data: customer }, {
+    status: 404, error: { code: 'NOT_FOUND', message: '客户不存在' },
+  }]);
+  const list = env.page('pages/staff/customers.ts');
+  await list.onShow();
+  assert.equal(list.data.loginRequired, true);
+  assert.equal(env.requests.length, 0);
+  env.staff.setStaffCustomerSession({ selected_role: 'employee', access_token: 'test-staff-token' });
+  await list.onShow();
+  assert.equal(list.data.customers[0].phone_masked, '199****0000');
+  list.changeKeyword({ detail: { value: ' 测试 ' } });
+  await list.changeStatus({ currentTarget: { dataset: { index: 0 } }, detail: { value: '2' } });
+  assert.match(env.requests[1].url, /\/staff\/me\/customers$/);
+  assert.equal(env.requests[1].data.q, '测试');
+  assert.equal(env.requests[1].data.visit_status, 'visited');
+  assert.equal(env.requests[1].header.Authorization, 'Bearer test-staff-token');
+  const detail = env.page('pages/staff/customer-detail.ts');
+  detail.onLoad({ id: customer.id });
+  await detail.onShow();
+  assert.equal(detail.data.customer.statuses[0], '已到店');
+  detail.onHide();
+  await detail.onShow();
+  assert.equal(detail.data.customer, null);
+  assert.equal(detail.data.unavailable, true);
+});
 
 test('registered login sends only the wx.login code and opens member home', async () => {
   const env = harness([{ data: realSession }]);

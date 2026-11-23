@@ -28,9 +28,9 @@
 | 名称 | 响应字段 |
 |---|---|
 | Session | access_token、refresh_token、expires_in、account_id、selected_role、available_roles、registration_required |
-| Member | id、member_no、name、birthday、phone_masked、status、registered_at；管理详情另含 source_employee_id、current_staff_id |
+| Member | id、member_no、name、birthday、phone_masked、status、registered_at；管理详情另含 source_employee_id、source_employee_name、current_staff_id、current_staff_name，以及 visit_status、consume_status、deal_status。无对应资料时相关字段为 null |
 | Staff | id、employee_no、display_name、role、status |
-| Customer | Member 的运营视图，另含 visit_status、consume_status、deal_status、last_effective_contact_at、next_recall_at |
+| Customer | Member 的运营视图，另含 visit_status、consume_status、deal_status、last_effective_contact_at、next_recall_at、current_staff_id |
 | Followup | id、member_id、staff_id、contact_type、followup_at、content、customer_feedback、effective_contact、gift_given、gift_name、next_followup_at |
 | Task | id、member_id、assigned_staff_id、task_type、status、title、scheduled_at、postponed_until、result、completed_at |
 | PointsAccount / PointsRecord | 账户含 member_id、balance、total_earned、total_spent；流水含 id、member_id、delta_points、balance_before、balance_after、record_type、source_type、created_at；后台另含经授权的 reason、operator_account_id、exchange_order_id |
@@ -79,7 +79,7 @@
 | GET /staff/me | R5 | 当前 Staff。 |
 | GET /staff/me/qr-code | R5 | 当前员工来源码状态及 expires_at。服务端只保存摘要，已签发明文无法再次读取。 |
 | POST /staff/me/qr-token/rotate | R5 | 串行作废旧码并返回本次新二维码展示数据及 expires_at，不缓存响应。 |
-| GET /staff/me/customers | R6 | 当前负责人为本人的 Customer 列表，筛选 q、visit_status、consume_status、deal_status。 |
+| GET /staff/me/customers | R6 | 当前负责人为本人的 Customer 列表，筛选 q、visit_status、consume_status、deal_status。q 支持姓名、会员编号或完整手机号精确检索。 |
 | GET /customers/{id} | R6 | 可见的 Customer 及当前归属。 |
 | PATCH /customers/{id}/status | R6 | 三类运营状态独立更新，至少传一个字段；返回 Customer。 |
 | GET /customers/{id}/followups | R6 | Followup 列表，筛选 contact_type、from、to。 |
@@ -98,8 +98,8 @@
 | 方法与路径 | 权限组 | 请求和响应 |
 |---|---|---|
 | GET /admin/dashboard | R11 | 返回会员数、待跟进任务数、上架商品数、待核销订单数，附 as_of。 |
-| GET /admin/members、GET /admin/members/{id} | R11 | Member 列表或详情，列表按 q、status、staff_id 过滤。手机号查询使用精确检索。 |
-| GET /admin/staff、GET /admin/staff/{id} | R12 | Staff 列表或详情，筛选 role、status、q。 |
+| GET /admin/members、GET /admin/members/{id} | R11 | Member 列表或详情，列表按 q、status、staff_id 过滤。q 支持姓名、会员编号或完整手机号精确检索，staff_id 只匹配当前负责人。 |
+| GET /admin/staff、GET /admin/staff/{id} | R12 | Staff 列表或详情，筛选 role、status、q（员工姓名或编号）。未分配员工编号时 employee_no 为 null。 |
 | POST /admin/staff、PATCH /admin/staff/{id} | R13 | 创建或修改员工档案，含 display_name、employee_no、role、status；管理员账号授权及员工开通流程过审后开放。 |
 | GET /admin/assignments | R7 | 归属列表，含 member_id、staff_id、is_current、bind_source、started_at、ended_at、change_reason，筛选 member_id、staff_id、is_current。 |
 | GET /admin/assignments/candidates | R7 | 在职候选员工列表，仅含 id、display_name，支持 q。 |

@@ -1,0 +1,10 @@
+@import "../../components/workspace/workspace.wxss";
+
+.customer-search, .customer-filters, .customer-pagination { display: flex; align-items: center; gap: 16rpx; }
+.customer-search input { flex: 1; min-width: 0; padding: 16rpx; background: #f4f7fb; border-radius: 12rpx; font-size: 26rpx; }
+.customer-filters { flex-wrap: wrap; margin-top: 20rpx; }
+.customer-filters picker { color: #155aa8; background: #edf5ff; border-radius: 12rpx; padding: 12rpx; font-size: 24rpx; }
+.customer-meta { color: #60728a; font-size: 26rpx; margin-top: 8rpx; word-break: break-all; }
+.customer-list-row + .customer-list-row { border-top: 1rpx solid #e4ebf3; }
+.customer-message { margin-bottom: 24rpx; }
+.customer-pagination { justify-content: space-between; color: #435b75; font-size: 26rpx; }

@@ -1,0 +1,6 @@
+@import "../../components/workspace/workspace.wxss";
+
+.customer-message { margin-bottom: 24rpx; }
+.workspace-row { align-items: flex-start; gap: 24rpx; }
+.workspace-row text:first-child { flex-shrink: 0; }
+.workspace-row text:last-child { text-align: right; word-break: break-all; }
