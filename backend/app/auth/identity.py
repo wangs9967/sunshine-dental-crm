@@ -40,9 +40,14 @@ def resolve_identity(
     available_roles: list[Role] = []
     registration_required = False
     if channel == "miniprogram" and wechat_linked:
-        registration_required = member_id is None
-        if member_status == "active":
-            available_roles.append("member")
+        if selected_role == "employee":
+            # Validate already-issued employee sessions without exposing employee login or switching.
+            if staff_role == "employee" and staff_status == "active" and staff_disabled_at is None:
+                available_roles.append("employee")
+        else:
+            registration_required = member_id is None
+            if member_status == "active":
+                available_roles.append("member")
     elif channel == "admin_web" and staff_status == "active" and staff_disabled_at is None:
         if staff_role == "manager":
             available_roles.append("manager")

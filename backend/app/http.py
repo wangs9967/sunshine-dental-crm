@@ -64,7 +64,9 @@ def install_http_handlers(app: FastAPI) -> None:
             logger.error("Request %s failed (%s)", request.state.request_id, type(exc).__name__)
             response = error(request, 500, "INTERNAL_ERROR", "服务暂时不可用")
         response.headers["X-Request-ID"] = request.state.request_id
-        if request.url.path.startswith(("/api/v1/auth/", "/api/v1/members/")):
+        if request.url.path.startswith(
+            ("/api/v1/auth/", "/api/v1/members/", "/api/v1/customers/", "/api/v1/exchange-orders/"),
+        ):
             response.headers["Cache-Control"] = "no-store"
         return response
 

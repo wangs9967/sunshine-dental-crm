@@ -1,3 +1,4 @@
+from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Annotated
 
@@ -13,10 +14,11 @@ from app.auth.admin_login import CHANNEL, check_credentials, login_retry_after
 from app.auth.audit import AuthAction, AuthOutcome, write_auth_audit
 from app.auth.identity import Channel, Identity, resolve_identity
 from app.auth.member import MemberView, RegisterRequest, SourceStatus, login_identity, read_member, register_member
+from app.auth.permissions import Permission, check_permission
 from app.auth.sessions import RejectedSession, SessionReference, SessionService, TokenPair, unavailable
 from app.auth.wechat import exchange_code
 from app.config import AuthSettings
-from app.db.models import Member, PointsAccount
+from app.db.models import Member, OperationLog, PointsAccount
 from app.db.session import get_db
 from app.http import APIError, SuccessEnvelope, error, success
 
@@ -114,6 +116,30 @@ def authenticate(
 CurrentSession = Annotated[Authenticated, Depends(authenticate)]
 
 
+def require_permission(permission: Permission) -> Callable[..., Authenticated]:
+    def check(request: Request, db: Database, session: CurrentSession) -> Authenticated:
+        try:
+            check_permission(permission, session.identity.selected_role)
+        except APIError as exc:
+            if request.method not in ("GET", "HEAD", "OPTIONS"):
+                db.add(OperationLog(
+                    actor_account_id=session.identity.account_id,
+                    actor_role=session.identity.selected_role or "registration",
+                    action="permission_denied",
+                    module="auth",
+                    summary=exc.code,
+                    after_data={"permission": permission, "channel": session.reference.record.channel},
+                    request_id=request.state.request_id,
+                ))
+                db.commit()
+            raise
+        return session
+    return check
+
+
+MemberSession = Annotated[Authenticated, Depends(require_permission("R2"))]
+
+
 def audit(
     db: Session, request: Request, action: AuthAction, outcome: AuthOutcome, identity: Identity | None = None,
     *, channel: Channel | None = None,
@@ -155,7 +181,9 @@ def register(request: Request, body: RegisterRequest, credentials: Credentials, 
         raise APIError(403, "FORBIDDEN", "当前身份不能注册会员")
     try:
         with db.begin():
-            member, source = register_member(db, record.account_id, body, settings, request.state.request_id)
+            member, source = register_member(
+                db, record.account_id, record.selected_role, body, settings, request.state.request_id,
+            )
             service.access(credentials.credentials)
             identity = Identity(
                 account_id=record.account_id, selected_role="member",
@@ -170,16 +198,12 @@ def register(request: Request, body: RegisterRequest, credentials: Credentials, 
 
 
 @members_router.get("/me", response_model=SuccessEnvelope[MemberView])
-def my_profile(request: Request, db: Database, session: CurrentSession, settings: Settings) -> JSONResponse:
-    if session.identity.selected_role != "member" or session.reference.record.channel != "miniprogram":
-        raise APIError(403, "FORBIDDEN", "当前身份不能查看会员资料")
+def my_profile(request: Request, db: Database, session: MemberSession, settings: Settings) -> JSONResponse:
     return success(request, read_member(db, session.identity.account_id, settings))
 
 
 @members_router.get("/me/points", response_model=SuccessEnvelope[PointsView])
-def my_points(request: Request, db: Database, session: CurrentSession) -> JSONResponse:
-    if session.identity.selected_role != "member" or session.reference.record.channel != "miniprogram":
-        raise APIError(403, "FORBIDDEN", "当前身份不能查看会员积分")
+def my_points(request: Request, db: Database, session: MemberSession) -> JSONResponse:
     points = db.scalar(select(PointsAccount).join(Member).where(Member.account_id == session.identity.account_id))
     if points is None:
         raise APIError(404, "NOT_FOUND", "积分账户不存在")

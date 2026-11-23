@@ -79,6 +79,7 @@ def auth_infrastructure() -> Iterator[tuple[Engine, int]]:
             tables = (
                 "accounts", "members", "staff_profiles", "operation_logs", "employee_qr_tokens",
                 "customer_assignments", "customer_status", "points_accounts",
+                "followup_tasks", "products", "exchange_orders",
             )
             Base.metadata.create_all(engine, tables=[Base.metadata.tables[name] for name in tables])
             yield engine, redis_port

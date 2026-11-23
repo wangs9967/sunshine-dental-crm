@@ -4,6 +4,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from redis import Redis
 
+from app.access_routes import router as access_router
 from app.auth.routes import members_router, router
 from app.auth.sessions import SessionService
 from app.config import AuthSettings
@@ -35,6 +36,7 @@ app = FastAPI(title="阳光口腔会员运营管理系统 API", version="0.1.0",
 install_http_handlers(app)
 app.include_router(router)
 app.include_router(members_router)
+app.include_router(access_router)
 
 
 @app.get("/health")

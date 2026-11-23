@@ -10,7 +10,8 @@ from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
-from app.auth.identity import Identity, resolve_identity
+from app.auth.identity import Identity, Role, resolve_identity
+from app.auth.permissions import check_permission
 from app.auth.phone import mask_phone, protect_phone, read_masked_phone
 from app.config import AuthSettings
 from app.db.models import (
@@ -104,13 +105,15 @@ def _source_employee(db: Session, token: str) -> UUID | None:
 
 
 def register_member(
-    db: Session, account_id: UUID, body: RegisterRequest, settings: AuthSettings, request_id: str,
+    db: Session, account_id: UUID, selected_role: Role | None, body: RegisterRequest,
+    settings: AuthSettings, request_id: str,
 ) -> tuple[MemberView, SourceStatus]:
     account = db.scalars(select(Account).where(Account.id == account_id).with_for_update()).one_or_none()
     if account is None or account.status != "active" or not account.wechat_openid:
         raise APIError(403, "MEMBER_ACCOUNT_UNAVAILABLE", "当前会员账号不可用，请联系门诊")
     if db.scalar(select(Member.id).where(Member.account_id == account_id)) is not None:
         raise APIError(409, "MEMBER_ALREADY_REGISTERED", "会员已注册，请重新微信登录")
+    check_permission("R1", selected_role)
 
     phone = body.phone.get_secret_value()
     ciphertext, search_hash = protect_phone(phone, settings)
