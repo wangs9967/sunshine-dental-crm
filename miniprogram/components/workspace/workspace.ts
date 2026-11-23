@@ -1,32 +1,42 @@
-import { entryRoute, isDemoRole, navigation } from '../../config/navigation';
+import { entryRoute, navigation, routes, routeUrl, workspaceLinks, workspacePath } from '../../config/navigation';
 import { endDemoSession, getDemoRole } from '../../services/demo-session';
 
 Component({
   options: { styleIsolation: 'apply-shared' },
-  properties: {
-    role: String,
-    current: Number,
-    emptyText: String,
-  },
   data: {
     permitted: false,
+    path: '',
     title: '',
     roleLabel: '',
-    links: [] as ReadonlyArray<{ url: string; label: string; description: string }>,
+    emptyText: '',
+    backUrl: '',
+    links: [] as ReturnType<typeof workspaceLinks>,
+    tabs: [] as ReadonlyArray<{ path: string; label: string }>,
   },
   pageLifetimes: {
     show() {
-      const { role, current } = this.properties;
-      if (!isDemoRole(role) || getDemoRole() !== role) {
+      const pages = getCurrentPages();
+      const page = pages[pages.length - 1];
+      const path = `/${page.route}`;
+      const route = routes[path];
+      if (!route || getDemoRole() !== route.role) {
         this.setData({ permitted: false });
         return;
       }
-      const workspace = navigation[role];
+      const id = page.options?.id;
+      const missingId = Boolean(route.id && routeUrl(path, id) === path);
+      const parent = route.back && missingId && routes[route.back].id
+        ? (routes[route.back].back ?? workspacePath(route.role))
+        : route.back;
       this.setData({
         permitted: true,
-        title: workspace.links[current]?.label ?? workspace.label,
-        roleLabel: workspace.label,
-        links: workspace.links,
+        path,
+        title: route.title,
+        roleLabel: navigation[route.role].label,
+        emptyText: missingId ? '缺少有效标识，请返回列表选择演示记录。' : (route.empty ?? ''),
+        backUrl: parent ? routeUrl(parent, routes[parent].id ? id : undefined) : '',
+        links: missingId ? [] : workspaceLinks(path, id),
+        tabs: route.back ? [] : navigation[route.role].tabs,
       });
     },
     hide() {
@@ -34,6 +44,15 @@ Component({
     },
   },
   methods: {
+    returnToParent() {
+      const fallback = this.data.backUrl;
+      if (!fallback) return;
+      if (getCurrentPages().length > 1) {
+        wx.navigateBack({ fail: () => wx.redirectTo({ url: fallback }) });
+      } else {
+        wx.redirectTo({ url: fallback });
+      }
+    },
     returnToEntry() {
       endDemoSession();
       wx.reLaunch({

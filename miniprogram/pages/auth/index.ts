@@ -1,5 +1,5 @@
 import { allowsDemoSession } from '../../config/environment';
-import { isDemoRole, navigation } from '../../config/navigation';
+import { isDemoRole, workspacePath } from '../../config/navigation';
 import { endDemoSession, startDemoSession } from '../../services/demo-session';
 
 Page({
@@ -13,7 +13,7 @@ Page({
 
     this.setData({ opening: true });
     wx.reLaunch({
-      url: navigation[role].links[0].url,
+      url: workspacePath(role),
       fail: () => {
         endDemoSession();
         this.setData({ opening: false });

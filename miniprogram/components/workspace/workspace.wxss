@@ -8,6 +8,15 @@
 .workspace-row { display: flex; justify-content: space-between; align-items: center; padding: 20rpx 16rpx; min-height: 68rpx; border-radius: 16rpx; }
 .workspace-current, .workspace-pressed { background: #edf5ff; }
 .workspace-label { font-size: 29rpx; font-weight: 600; }
-.workspace-detail { font-size: 24rpx; color: #60728a; margin-top: 6rpx; }
-.workspace-marker { color: #155aa8; font-size: 23rpx; }
 .workspace-arrow { color: #155aa8; font-size: 38rpx; }
+.workspace-with-tabs { padding-bottom: calc(128rpx + env(safe-area-inset-bottom)); }
+.workspace-tabs {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 2; display: flex;
+  padding: 12rpx 18rpx calc(12rpx + env(safe-area-inset-bottom));
+  background: white; border-top: 1rpx solid #e4ebf3;
+}
+.workspace-tab {
+  flex: 1; padding: 18rpx 0; border-radius: 12rpx; text-align: center;
+  color: #435b75; font-size: 26rpx;
+}
+.workspace-tab.workspace-current { color: #155aa8; font-weight: 650; }
