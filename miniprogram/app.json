@@ -19,7 +19,8 @@
     "pages/staff/tasks",
     "pages/staff/home-visit",
     "pages/staff/followup-history",
-    "pages/staff/profile"
+    "pages/staff/profile",
+    "pages/member/register"
   ],
   "window": {
     "navigationBarTitleText": "阳光口腔",

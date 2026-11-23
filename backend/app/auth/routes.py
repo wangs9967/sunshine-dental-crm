@@ -4,6 +4,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, ConfigDict, Field, SecretStr
+from sqlalchemy import select
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 from starlette.responses import JSONResponse
@@ -11,13 +12,19 @@ from starlette.responses import JSONResponse
 from app.auth.admin_login import CHANNEL, check_credentials, login_retry_after
 from app.auth.audit import AuthAction, AuthOutcome, write_auth_audit
 from app.auth.identity import Channel, Identity, resolve_identity
+from app.auth.member import MemberView, RegisterRequest, SourceStatus, login_identity, register_member
 from app.auth.sessions import RejectedSession, SessionReference, SessionService, TokenPair, unavailable
+from app.auth.wechat import exchange_code
+from app.config import AuthSettings
+from app.db.models import Member, PointsAccount
 from app.db.session import get_db
 from app.http import APIError, SuccessEnvelope, error, success
 
 router = APIRouter(prefix="/api/v1/auth", tags=["auth"])
+members_router = APIRouter(prefix="/api/v1/members", tags=["members"])
 bearer = HTTPBearer(auto_error=False)
 Database = Annotated[Session, Depends(get_db)]
+Credentials = Annotated[HTTPAuthorizationCredentials | None, Depends(bearer)]
 
 
 def get_sessions(request: Request) -> SessionService:
@@ -27,6 +34,19 @@ def get_sessions(request: Request) -> SessionService:
 
 
 Sessions = Annotated[SessionService, Depends(get_sessions)]
+
+
+def auth_settings(request: Request) -> AuthSettings:
+    return request.app.state.auth_settings
+
+
+Settings = Annotated[AuthSettings, Depends(auth_settings)]
+
+
+class WechatLoginRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    code: SecretStr = Field(min_length=1, max_length=256)
+    scene_token: SecretStr | None = Field(default=None, max_length=256)
 
 
 class RefreshRequest(BaseModel):
@@ -44,6 +64,18 @@ class SessionPayload(Identity):
     access_token: str
     refresh_token: str
     expires_in: int
+
+
+class RegistrationPayload(MemberView):
+    source_status: SourceStatus
+    session: SessionPayload
+
+
+class PointsView(BaseModel):
+    member_id: str
+    balance: str
+    total_earned: str
+    total_spent: str
 
 
 class LogoutResult(BaseModel):
@@ -67,7 +99,7 @@ def current_identity(db: Session, reference: SessionReference) -> Identity | Non
 def authenticate(
     session_service: Sessions,
     db: Database,
-    credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(bearer)],
+    credentials: Credentials,
 ) -> Authenticated:
     if credentials is None:
         raise RejectedSession()
@@ -97,6 +129,57 @@ def session_payload(identity: Identity, pair: TokenPair) -> SessionPayload:
         **identity.model_dump(), access_token=pair.access_token,
         refresh_token=pair.refresh_token, expires_in=pair.expires_in,
     )
+
+
+@router.post("/wechat/login", response_model=SuccessEnvelope[SessionPayload])
+def wechat_login(request: Request, body: WechatLoginRequest, service: Sessions, db: Database,
+                 settings: Settings) -> JSONResponse:
+    openid = exchange_code(body.code.get_secret_value(), settings)
+    try:
+        identity = login_identity(db, openid)
+        pair = service.issue(identity.account_id, identity.selected_role, "miniprogram")
+    except SQLAlchemyError:
+        raise unavailable() from None
+    audit(db, request, "wechat_login", "success", identity, channel="miniprogram")
+    return success(request, session_payload(identity, pair))
+
+
+@members_router.post("/register", status_code=201, response_model=SuccessEnvelope[RegistrationPayload])
+def register(request: Request, body: RegisterRequest, credentials: Credentials, service: Sessions,
+             db: Database, settings: Settings) -> JSONResponse:
+    if credentials is None:
+        raise RejectedSession()
+    reference = service.access(credentials.credentials)
+    record = reference.record
+    if record.channel != "miniprogram" or record.selected_role not in (None, "member"):
+        raise APIError(403, "FORBIDDEN", "当前身份不能注册会员")
+    try:
+        with db.begin():
+            member, source = register_member(db, record.account_id, body, settings, request.state.request_id)
+            service.access(credentials.credentials)
+            identity = Identity(
+                account_id=record.account_id, selected_role="member",
+                available_roles=["member"], registration_required=False,
+            )
+            # Issue before commit. The new session is unusable while the member row is uncommitted.
+            pair = service.issue(record.account_id, "member", "miniprogram")
+    except SQLAlchemyError:
+        raise APIError(503, "MEMBER_REGISTRATION_UNAVAILABLE", "注册暂不可用，请稍后重试") from None
+    payload = RegistrationPayload(**member.model_dump(), source_status=source, session=session_payload(identity, pair))
+    return success(request, payload, status=201)
+
+
+@members_router.get("/me/points", response_model=SuccessEnvelope[PointsView])
+def my_points(request: Request, db: Database, session: CurrentSession) -> JSONResponse:
+    if session.identity.selected_role != "member" or session.reference.record.channel != "miniprogram":
+        raise APIError(403, "FORBIDDEN", "当前身份不能查看会员积分")
+    points = db.scalar(select(PointsAccount).join(Member).where(Member.account_id == session.identity.account_id))
+    if points is None:
+        raise APIError(404, "NOT_FOUND", "积分账户不存在")
+    return success(request, PointsView(
+        member_id=str(points.member_id), balance=str(points.balance),
+        total_earned=str(points.total_earned), total_spent=str(points.total_spent),
+    ))
 
 
 @router.post("/admin/login", response_model=SuccessEnvelope[SessionPayload])

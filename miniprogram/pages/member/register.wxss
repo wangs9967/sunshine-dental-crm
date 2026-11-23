@@ -1,0 +1,11 @@
+@import "../auth/index.wxss";
+
+.field { display: block; margin-bottom: 24rpx; color: #192840; font-size: 30rpx; font-weight: 600; }
+.field input, .field-control {
+  margin-top: 10rpx;
+  padding: 18rpx 20rpx;
+  min-height: 36rpx;
+  border: 1rpx solid #d8e3ef;
+  border-radius: 12rpx;
+  font-weight: 400;
+}

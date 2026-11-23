@@ -1,0 +1,24 @@
+<view class="entry">
+  <view class="entry-hero">
+    <text class="entry-brand">阳光口腔</text>
+    <view class="entry-title">填写会员资料</view>
+  </view>
+  <view class="entry-panel">
+    <label class="field">
+      <text>姓名</text>
+      <input maxlength="80" placeholder="请输入姓名" value="{{name}}" bindinput="updateName" />
+    </label>
+    <picker mode="date" end="{{today}}" value="{{birthday || today}}" bindchange="updateBirthday">
+      <view class="field">
+        <text>生日</text>
+        <view class="field-control">{{birthday || '请选择出生日期'}}</view>
+      </view>
+    </picker>
+    <label class="field">
+      <text>手机号</text>
+      <input type="number" maxlength="11" placeholder="请输入联系电话" value="{{phone}}" bindinput="updatePhone" />
+    </label>
+    <view wx:if="{{error}}" class="entry-error" role="alert">{{error}}</view>
+    <t-button theme="primary" block loading="{{submitting}}" disabled="{{submitting}}" bind:tap="submit">提交注册</t-button>
+  </view>
+</view>

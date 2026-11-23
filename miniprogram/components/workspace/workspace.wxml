@@ -4,6 +4,7 @@
       <text class="workspace-role">{{roleLabel}}</text>
       <view class="workspace-title">{{title}}</view>
     </view>
+    <view class="workspace-empty" wx:if="{{points !== ''}}">当前积分：{{points}} 分</view>
     <view class="workspace-empty" wx:if="{{emptyText}}">{{emptyText}}</view>
     <view class="workspace-panel" wx:if="{{links.length}}">
       <view class="workspace-heading">快捷入口</view>
@@ -13,7 +14,7 @@
       </navigator>
     </view>
     <t-button wx:if="{{backUrl}}" theme="primary" variant="outline" block bind:tap="returnToParent">返回上一页</t-button>
-    <t-button wx:else theme="primary" variant="outline" block bind:tap="returnToEntry">切换演示身份</t-button>
+    <t-button wx:else theme="primary" variant="outline" block loading="{{logoutPending}}" disabled="{{logoutPending}}" bind:tap="returnToEntry">{{realMember ? '退出登录' : '切换演示身份'}}</t-button>
     <view wx:if="{{tabs.length}}" class="workspace-tabs" aria-label="{{roleLabel}}导航">
       <block wx:for="{{tabs}}" wx:key="path">
         <view wx:if="{{path === item.path}}" class="workspace-tab workspace-current" aria-label="{{item.label}}，当前页面">{{item.label}}</view>
@@ -22,7 +23,7 @@
     </view>
   </block>
   <block wx:else>
-    <view class="workspace-empty">请先选择此页面所需的演示身份。</view>
-    <t-button theme="primary" block bind:tap="returnToEntry">返回身份选择</t-button>
+    <view class="workspace-empty">请先登录后再进入此页面。</view>
+    <t-button theme="primary" block bind:tap="returnToEntry">返回登录</t-button>
   </block>
 </view>

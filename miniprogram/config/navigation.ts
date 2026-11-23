@@ -13,6 +13,7 @@ type WorkspaceRoute = {
 };
 
 export const entryRoute = '/pages/auth/index';
+export const memberRegistrationRoute = '/pages/member/register';
 
 export const navigation = {
   member: {

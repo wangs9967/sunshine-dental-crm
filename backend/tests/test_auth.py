@@ -76,7 +76,10 @@ def auth_infrastructure() -> Iterator[tuple[Engine, int]]:
                     if attempt == 59:
                         raise
                     time.sleep(0.5)
-            tables = ("accounts", "members", "staff_profiles", "operation_logs")
+            tables = (
+                "accounts", "members", "staff_profiles", "operation_logs", "employee_qr_tokens",
+                "customer_assignments", "customer_status", "points_accounts",
+            )
             Base.metadata.create_all(engine, tables=[Base.metadata.tables[name] for name in tables])
             yield engine, redis_port
         finally:

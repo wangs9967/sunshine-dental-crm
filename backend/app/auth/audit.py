@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 from app.auth.identity import Channel, Identity
 from app.db.models import OperationLog
 
-AuthAction = Literal["refresh", "logout", "admin_login"]
+AuthAction = Literal["refresh", "logout", "admin_login", "wechat_login"]
 AuthOutcome = Literal[
     "success", "invalid_session", "identity_rejected", "refresh_replay", "rate_limited",
     "unknown_account", "invalid_password", "inactive_account", "missing_staff_profile",

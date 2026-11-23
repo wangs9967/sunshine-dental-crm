@@ -6,4 +6,5 @@
 .entry-option + .entry-option { padding-top: 28rpx; margin-top: 28rpx; border-top: 1rpx solid #e4ebf3; }
 .entry-option-title { font-size: 32rpx; font-weight: 650; }
 .entry-description { margin: 8rpx 0 20rpx; color: #60728a; font-size: 26rpx; }
-.entry-note { margin-top: 24rpx; color: #60728a; font-size: 24rpx; }
+.entry-note { margin-bottom: 20rpx; color: #60728a; font-size: 24rpx; }
+.entry-error { color: #a32929; margin: 0 0 20rpx; font-size: 26rpx; }

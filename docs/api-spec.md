@@ -42,14 +42,14 @@
 
 | 方法与路径 | 权限组 | 请求和响应 |
 |---|---|---|
-| POST /auth/wechat/login | 公开 | code 必填，可由入口携带 scene_token。服务端换取微信身份，返回 Session；注册和绑定流程继续使用有效 scene_token。 |
+| POST /auth/wechat/login | 公开 | code 必填，可携带 scene_token。服务端向微信换取 OpenID，返回 Session。已注册会员直接登录，首次注册时由小程序再次提交来源码。凭据无效返回 400 WECHAT_CODE_INVALID，微信服务异常返回 502 WECHAT_UNAVAILABLE。 |
 | POST /auth/admin/login | 公开 | username、password。验证启用账号及在职店长或管理员档案，通过后返回 Session。凭据或资格校验失败统一返回 401 INVALID_CREDENTIALS。限流返回 429 LOGIN_RATE_LIMITED 和 Retry-After。 |
 | POST /auth/refresh | 持有效刷新会话 | refresh_token，轮换令牌并返回 Session。 |
 | POST /auth/logout | 已认证 | 撤销当前会话，返回 logged_out。 |
 | GET /auth/me | 已认证 | account_id、selected_role、available_roles、registration_required。角色切换必须经服务端重新授权；员工开通与登录方式按评审门槛开通。 |
 | POST /auth/select-role | 已认证 | role 必须在当前渠道和账号实际授权的 available_roles 中；重新签发 Session 并撤销旧会话。员工身份切换随开通规则生效。 |
 | GET /clinic-profile | 公开 | 门诊名称、联系电话、地址、导航坐标、隐私协议和服务协议入口。仅返回公开配置。 |
-| POST /members/register | R1 | name、birthday、phone 必填，可选 scene_token。返回 Member；重复注册 409。有效首次扫码随注册建立归属、运营状态和零余额积分账户。 |
+| POST /members/register | R1 | name、birthday、phone 必填，可选 scene_token。返回 201，data 包含 Member 字段及 `session` 和 `source_status`。重复注册返回 409 MEMBER_ALREADY_REGISTERED。有效首次扫码建立首次归属。 |
 | GET /members/me | R2 | 返回本人 Member。 |
 | PATCH /members/me | R3 | 允许字段和手机号验证按业务确认开放。当前冻结为不可提交，开放后返回 Member。 |
 | GET /members/me/points | R2 | 本人 PointsAccount。 |
@@ -62,6 +62,8 @@
 访问令牌和刷新令牌均为不透明随机值。访问令牌默认有效 600 秒，会话自初次签发起最多有效 604800 秒，刷新不延长会话总期限。刷新成功会同时替换两个令牌。已使用的刷新令牌再次提交会撤销整个会话，并写入脱敏审计。客户端应确保同一会话同时只有一个刷新请求。退出撤销整个会话。
 
 授权依据为账号、当前档案、选定角色和会话渠道。注册前会话使用 `selected_role: null`、`available_roles: []`、`registration_required: true`。后续业务接口仍需单独声明所需权限或档案。
+
+会员注册返回的新 `session` 替代注册会话，小程序接收后进入会员首页。员工来源码的状态为 `none`（未提供）、`bound`（已关联）或 `invalid`（所提供的来源码无效、过期、撤销或来源员工不可用）。`invalid` 时仍完成注册。手机号用于联系、允许共用、无需短信验证。积分账户初始余额为字符串 `"0"`。
 
 后台登录限流使用 300 秒窗口，每来源最多 30 次，同一来源和用户名组合最多 5 次。后台认证审计保留渠道、结果和 Request ID，登录成功记录账号与角色，失败以匿名记录原因。
 | GET /members/me/exchange-orders | R2 | 本人 Order 列表，筛选 status。 |

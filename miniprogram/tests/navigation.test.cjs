@@ -2,12 +2,13 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const test = require('node:test');
-const { navigation, routes, routeUrl, workspaceLinks, workspacePath } = require('../config/navigation.ts');
+const { memberRegistrationRoute, navigation, routes, routeUrl, workspaceLinks, workspacePath } = require('../config/navigation.ts');
 const app = require('../app.json');
 
 test('every workspace page is registered, present and reachable from its own entrance', () => {
   assert.equal(new Set(app.pages).size, app.pages.length);
-  assert.deepEqual(new Set(app.pages.slice(2).map((page) => `/${page}`)), new Set(Object.keys(routes)));
+  assert.deepEqual(new Set(app.pages.slice(2).map((page) => `/${page}`)),
+    new Set([...Object.keys(routes), memberRegistrationRoute]));
 
   for (const [role, { tabs }] of Object.entries(navigation)) {
     const visited = new Set();

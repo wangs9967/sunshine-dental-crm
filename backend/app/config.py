@@ -17,6 +17,10 @@ class AuthSettings(BaseSettings):
     redis_port: int = 6379
     redis_db: int = 0
     redis_password: SecretStr | None = None
+    wechat_app_id: str = ""
+    wechat_app_secret: SecretStr | None = None
+    phone_encryption_key: SecretStr | None = None
+    phone_lookup_hmac_key: SecretStr | None = None
     auth_access_ttl_seconds: int = Field(default=600, gt=0, le=900)
     auth_session_ttl_seconds: int = Field(default=604800, gt=0)
 

@@ -1,10 +1,14 @@
 import { entryRoute, navigation, routes, routeUrl, workspaceLinks, workspacePath } from '../../config/navigation';
 import { endDemoSession, getDemoRole } from '../../services/demo-session';
+import { errorMessage, loadPoints, logoutMember, memberState } from '../../services/member-session';
 
 Component({
   options: { styleIsolation: 'apply-shared' },
   data: {
     permitted: false,
+    realMember: false,
+    points: '',
+    logoutPending: false,
     path: '',
     title: '',
     roleLabel: '',
@@ -19,7 +23,8 @@ Component({
       const page = pages[pages.length - 1];
       const path = `/${page.route}`;
       const route = routes[path];
-      if (!route || getDemoRole() !== route.role) {
+      const realMember = memberState() === 'member' && route?.role === 'member';
+      if (!route || (!realMember && getDemoRole() !== route.role)) {
         this.setData({ permitted: false });
         return;
       }
@@ -30,20 +35,32 @@ Component({
         : route.back;
       this.setData({
         permitted: true,
+        realMember,
         path,
         title: route.title,
         roleLabel: navigation[route.role].label,
-        emptyText: missingId ? '缺少有效标识，请返回列表选择演示记录。' : (route.empty ?? ''),
+        emptyText: realMember && path === '/pages/points/index' ? '正在读取积分…'
+          : missingId ? '缺少有效标识，请返回列表。' : (route.empty ?? ''),
+        points: '',
         backUrl: parent ? routeUrl(parent, routes[parent].id ? id : undefined) : '',
         links: missingId ? [] : workspaceLinks(path, id),
         tabs: route.back ? [] : navigation[route.role].tabs,
       });
+      if (realMember && path === '/pages/points/index') this.fetchPoints();
     },
     hide() {
       this.setData({ permitted: false });
     },
   },
   methods: {
+    async fetchPoints() {
+      try {
+        const points = await loadPoints();
+        if (this.data.permitted) this.setData({ points, emptyText: '' });
+      } catch (error) {
+        if (this.data.permitted) this.setData({ emptyText: errorMessage(error) });
+      }
+    },
     returnToParent() {
       const fallback = this.data.backUrl;
       if (!fallback) return;
@@ -53,7 +70,19 @@ Component({
         wx.redirectTo({ url: fallback });
       }
     },
-    returnToEntry() {
+    async returnToEntry() {
+      if (this.data.logoutPending) return;
+      if (this.data.realMember) {
+        this.setData({ logoutPending: true });
+        try {
+          await logoutMember();
+        } catch (error) {
+          wx.showToast({ title: errorMessage(error), icon: 'none' });
+          return;
+        } finally {
+          this.setData({ logoutPending: false });
+        }
+      }
       endDemoSession();
       wx.reLaunch({
         url: entryRoute,

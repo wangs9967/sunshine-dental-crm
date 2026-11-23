@@ -3,7 +3,7 @@
   "private": true,
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "test": "node --test tests/navigation.test.cjs"
+    "test": "node --test tests/*.test.cjs"
   },
   "dependencies": {
     "tdesign-miniprogram": "^1.18.0"
