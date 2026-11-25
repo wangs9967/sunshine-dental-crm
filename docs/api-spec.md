@@ -101,7 +101,7 @@
 | GET /admin/members、GET /admin/members/{id} | R11 | Member 列表或详情，列表按 q、status、staff_id 过滤。q 支持姓名、会员编号或完整手机号精确检索，staff_id 只匹配当前负责人。 |
 | GET /admin/staff、GET /admin/staff/{id} | R12 | Staff 列表或详情，筛选 role、status、q（员工姓名或编号）。未分配员工编号时 employee_no 为 null。 |
 | POST /admin/staff、PATCH /admin/staff/{id} | R13 | 创建或修改员工档案，含 display_name、employee_no、role、status；管理员账号授权及员工开通流程过审后开放。 |
-| GET /admin/assignments | R7 | 归属列表，含 id、member_id、staff_id、is_current、bind_source、started_at、ended_at、change_reason、operator_account_id，筛选 member_id、staff_id、is_current。指定会员且 is_current=true 时，空列表表示当前无负责人。 |
+| GET /admin/assignments | R7 | 归属列表，含 id、member_id、staff_id、staff_name、is_current、bind_source、started_at、ended_at、change_reason、operator_account_id，筛选 member_id、staff_id、is_current。指定会员且 is_current=true 时，空列表表示当前无负责人。staff_name 为对应员工档案的姓名，转移响应的 current_assignment 同样包含该字段。 |
 | GET /admin/assignments/candidates | R7 | 按姓名排序的在职候选列表，筛选账号启用的 employee 角色档案。每项仅含 id、display_name，支持 q 按姓名查询。 |
 | GET /admin/followups | R11 | Followup 列表，筛选 member_id、staff_id、contact_type、from、to。客户操作复用 /customers 路径。 |
 | GET /admin/points/accounts、GET /admin/points/records | R11 | PointsAccount 或 PointsRecord 列表，筛选 member_id，流水另可筛选 record_type、from、to。 |

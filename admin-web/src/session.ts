@@ -66,8 +66,8 @@ export function loginErrorMessage(error: unknown): string {
   return error instanceof AuthError ? error.message : '认证服务暂时不可用，请重试。';
 }
 
-export class AdminReadError extends Error {
-  constructor(readonly status: number) {
+export class AdminRequestError extends Error {
+  constructor(readonly status: number, readonly code?: string) {
     super(status === 401 ? '当前会话已结束，请重新登录。'
       : status === 403 ? '当前身份没有查看权限。'
       : status === 404 ? '该资料不存在。'
@@ -117,24 +117,42 @@ export class AdminSession {
   }
 
   async read<T>(path: string, signal: AbortSignal): Promise<T> {
-    const get = (token: string) => fetch('/api/v1/admin' + path, {
-      cache: 'no-store', credentials: 'omit', redirect: 'error', signal,
-      headers: { Authorization: `Bearer ${token}` },
+    return this.request<T>('/admin' + path, { signal });
+  }
+
+  async transferCustomer(memberId: string, data: {
+    to_staff_id: string;
+    expected_assignment_id: string | null;
+    reason: string;
+  }): Promise<void> {
+    await this.request('/customers/' + encodeURIComponent(memberId) + '/transfer', {
+      method: 'POST', body: JSON.stringify(data),
+    });
+  }
+
+  private async request<T>(path: string, init: RequestInit): Promise<T> {
+    const send = (token: string) => fetch('/api/v1' + path, {
+      cache: 'no-store', credentials: 'omit', redirect: 'error',
+      ...init,
+      headers: {
+        Authorization: `Bearer ${token}`,
+        ...(init.body ? { 'Content-Type': 'application/json' } : {}),
+      },
     });
     const firstToken = this.#session.access_token;
-    let response = await get(firstToken);
-    if (response.status === 401 && !this.#loggingOut && !signal.aborted) {
+    let response = await send(firstToken);
+    if (response.status === 401 && !this.#loggingOut && !init.signal?.aborted) {
       try {
         if (this.#session.access_token === firstToken) await this.rotate();
       } catch (error) {
-        if (error instanceof AuthError) throw new AdminReadError(error.status);
+        if (error instanceof AuthError) throw new AdminRequestError(error.status);
         throw error;
       }
-      response = await get(this.#session.access_token);
+      response = await send(this.#session.access_token);
     }
-    if (!response.ok) throw new AdminReadError(response.status);
-    const result = await response.json();
-    if (result?.success !== true) throw new AdminReadError(503);
+    const result = await response.json().catch(() => undefined);
+    if (!response.ok) throw new AdminRequestError(response.status, result?.error?.code);
+    if (result?.success !== true) throw new AdminRequestError(503);
     return result.data as T;
   }
 

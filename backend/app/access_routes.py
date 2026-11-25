@@ -133,7 +133,10 @@ def list_assignments(
     page: PageNumber = 1, page_size: PageSize = 20,
     member_id: UUID | None = None, staff_id: UUID | None = None, is_current: bool | None = None,
 ) -> JSONResponse:
-    query = select(CustomerAssignment)
+    query = (
+        select(CustomerAssignment, StaffProfile.display_name)
+        .join(StaffProfile, StaffProfile.id == CustomerAssignment.staff_id)
+    )
     if member_id is not None:
         query = query.where(CustomerAssignment.member_id == member_id)
     if staff_id is not None:
@@ -142,8 +145,8 @@ def list_assignments(
         query = query.where(CustomerAssignment.is_current.is_(is_current))
     total = count_rows(db, query)
     query = query.order_by(CustomerAssignment.started_at.desc(), CustomerAssignment.id.desc())
-    rows = db.scalars(query.offset((page - 1) * page_size).limit(page_size))
-    items = [AssignmentView.model_validate(assignment) for assignment in rows]
+    rows = db.execute(query.offset((page - 1) * page_size).limit(page_size))
+    items = [AssignmentView.from_record(assignment, staff_name) for assignment, staff_name in rows]
     return success(request, Page[AssignmentView](items=items, page=page, page_size=page_size, total=total))
 
 

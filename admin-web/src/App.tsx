@@ -14,6 +14,7 @@ import './styles.css';
 
 const WorkspacePage = lazy(() => import('./pages/WorkspacePage'));
 const DirectoryPage = lazy(() => import('./pages/DirectoryPage'));
+const AssignmentsPage = lazy(() => import('./pages/AssignmentsPage'));
 type Navigate = (path: string, event?: MouseEvent<HTMLAnchorElement>) => void;
 export type { Navigate };
 
@@ -91,6 +92,7 @@ function AdminLayout({ role, path, navigate, onLogout, session, onExpired }: {
                 {route.entry.path === '/members' || route.entry.path === '/employees'
                   ? <DirectoryPage key={path} path={path} base={route.entry.path} session={session}
                       navigate={navigate} onExpired={onExpired} />
+                  : route.entry.path === '/assignments' ? <AssignmentsPage session={session} onExpired={onExpired} />
                   : <WorkspacePage key={path} title={title} dashboard={route.entry.path === '/dashboard'}
                       searchable={route.title === route.entry.title && route.entry.path !== '/settings'} navigate={navigate} />}
               </Suspense>

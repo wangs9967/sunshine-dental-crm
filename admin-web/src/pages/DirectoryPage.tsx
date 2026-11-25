@@ -1,9 +1,9 @@
 import { Button, Card, Descriptions, Input, Select, Space, Table } from 'antd';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import type { Navigate } from '../App';
 import { EmptyState, ErrorState, LoadingState, StatusTag } from '../components/page';
-import { AdminReadError } from '../session';
 import type { AdminSession } from '../session';
+import { useAdminRead as useRead } from '../useAdminRead';
 
 type Staff = { id: string; display_name: string; employee_no: string | null; role: string; status: string };
 type Member = {
@@ -26,28 +26,6 @@ const operational: Record<string, string> = {
 const dateTime = new Intl.DateTimeFormat('zh-CN', {
   timeZone: 'Asia/Shanghai', dateStyle: 'medium', timeStyle: 'short',
 });
-
-function useRead<T>(session: AdminSession, path?: string) {
-  const [result, setResult] = useState<{ data?: T; error?: string; expired?: boolean }>({});
-  const [attempt, retry] = useState(0);
-  useEffect(() => {
-    if (!path) return;
-    const controller = new AbortController();
-    setResult({});
-    session.read<T>(path, controller.signal).then(
-      (data) => { if (!controller.signal.aborted) setResult({ data }); },
-      (error: unknown) => {
-        if (controller.signal.aborted) return;
-        setResult({
-          error: error instanceof AdminReadError ? error.message : '读取失败，请重试。',
-          expired: error instanceof AdminReadError && error.status === 401,
-        });
-      },
-    );
-    return () => controller.abort();
-  }, [session, path, attempt]);
-  return { ...result, retry: () => retry(attempt + 1) };
-}
 
 function ReadError({ error, expired, retry, onExpired }: {
   error: string; expired?: boolean; retry: () => void; onExpired: () => void;

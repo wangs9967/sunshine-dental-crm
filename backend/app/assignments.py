@@ -12,11 +12,10 @@ from app.http import APIError
 
 
 class AssignmentView(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
-
     id: UUID
     member_id: UUID
     staff_id: UUID
+    staff_name: str
     is_current: bool
     bind_source: str
     started_at: datetime
@@ -27,6 +26,14 @@ class AssignmentView(BaseModel):
     @field_serializer("started_at", "ended_at", when_used="json")
     def utc_time(self, value: datetime | None) -> datetime | None:
         return value.astimezone(UTC) if value is not None else None
+
+    @classmethod
+    def from_record(cls, record: CustomerAssignment, staff_name: str) -> "AssignmentView":
+        return cls(
+            id=record.id, member_id=record.member_id, staff_id=record.staff_id, staff_name=staff_name,
+            is_current=record.is_current, bind_source=record.bind_source, started_at=record.started_at,
+            ended_at=record.ended_at, change_reason=record.change_reason, operator_account_id=record.operator_account_id,
+        )
 
 
 class AssignmentCandidate(BaseModel):
@@ -99,7 +106,7 @@ def change_assignment(
         request_id=request_id, created_at=changed_at,
     ))
     result = TransferResult(
-        current_assignment=AssignmentView.model_validate(assignment), previous_assignment_id=previous_id,
+        current_assignment=AssignmentView.from_record(assignment, target.display_name), previous_assignment_id=previous_id,
     )
     db.commit()
     return result

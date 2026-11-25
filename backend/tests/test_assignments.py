@@ -24,6 +24,8 @@ def test_assign_then_transfer_and_keep_history(auth: AuthFixture, phones: None) 
         first_account, first_staff = add_employee(db)
         next_account, next_staff = add_employee(db)
         manager, _ = add_employee(db, "manager")
+        db.get_one(StaffProfile, first_staff).display_name = "原负责人"
+        db.get_one(StaffProfile, next_staff).display_name = "新负责人"
         member = add_member(db)
         db.get_one(Member, member).source_employee_id = first_staff
         db.commit()
@@ -50,6 +52,7 @@ def test_assign_then_transfer_and_keep_history(auth: AuthFixture, phones: None) 
     initial = data["current_assignment"]
     assert data["previous_assignment_id"] is None
     assert initial["staff_id"] == str(first_staff) and initial["bind_source"] == "manual"
+    assert initial["staff_name"] == "原负责人"
     assert initial["change_reason"] == "初次分配" and initial["operator_account_id"] == str(auth.account_id)
     assert initial["is_current"] is True and initial["ended_at"] is None and initial["started_at"].endswith("Z")
     assert auth.client.get(detail, headers=first_headers).status_code == 200
@@ -63,6 +66,7 @@ def test_assign_then_transfer_and_keep_history(auth: AuthFixture, phones: None) 
     assert moved.json()["data"]["previous_assignment_id"] == initial["id"]
     replacement = moved.json()["data"]["current_assignment"]
     assert replacement["staff_id"] == str(next_staff) and replacement["bind_source"] == "admin_transfer"
+    assert replacement["staff_name"] == "新负责人"
     assert replacement["change_reason"] == "交接" and replacement["operator_account_id"] == str(manager)
     assert_error(auth.client.get(detail, headers=first_headers), 404, "NOT_FOUND")
     assert auth.client.get(detail, headers=next_headers).json()["data"]["current_staff_id"] == str(next_staff)
