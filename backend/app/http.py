@@ -80,7 +80,7 @@ def install_http_handlers(app: FastAPI) -> None:
         response.headers["X-Request-ID"] = request.state.request_id
         if request.url.path.startswith(
             ("/api/v1/auth/", "/api/v1/members/", "/api/v1/customers/", "/api/v1/exchange-orders/",
-             "/api/v1/admin/members", "/api/v1/admin/staff", "/api/v1/staff/me/customers"),
+             "/api/v1/admin/members", "/api/v1/admin/staff", "/api/v1/staff/me/customers", "/api/v1/admin/assignments"),
         ):
             response.headers["Cache-Control"] = "no-store"
         return response

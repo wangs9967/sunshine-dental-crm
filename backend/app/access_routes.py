@@ -7,10 +7,13 @@ from pydantic import BaseModel
 from sqlalchemy import or_, select
 from starlette.responses import JSONResponse
 
+from app.assignments import (
+    AssignmentCandidate, AssignmentView, TransferRequest, TransferResult, change_assignment, eligible_employees,
+)
 from app.auth.member import MemberView
 from app.auth.routes import Authenticated, Database, MemberSession, Settings, require_permission
 from app.auth.scopes import current_customer_assignment, customer_scope, own_customer_scope, owned_order
-from app.db.models import CustomerStatus, Member, StaffProfile
+from app.db.models import CustomerAssignment, CustomerStatus, Member, StaffProfile
 from app.directory import (
     AdminMemberView, CustomerView, Page, StaffView, admin_member_detail, count_rows, customer_detail, customer_view,
     customers, member_search, member_view,
@@ -19,6 +22,7 @@ from app.http import APIError, SuccessEnvelope, success
 
 router = APIRouter(prefix="/api/v1")
 CustomerSession = Annotated[Authenticated, Depends(require_permission("R6"))]
+AssignmentSession = Annotated[Authenticated, Depends(require_permission("R7"))]
 AdminMemberSession = Annotated[Authenticated, Depends(require_permission("R11"))]
 AdminStaffSession = Annotated[Authenticated, Depends(require_permission("R12"))]
 PageNumber = Annotated[int, Query(ge=1, le=2147483647)]
@@ -121,6 +125,48 @@ def read_admin_staff(request: Request, id: UUID, db: Database, session: AdminSta
     if staff is None:
         raise APIError(404, "NOT_FOUND", "员工档案不存在")
     return success(request, StaffView.model_validate(staff))
+
+
+@router.get("/admin/assignments", tags=["assignments"], response_model=SuccessEnvelope[Page[AssignmentView]])
+def list_assignments(
+    request: Request, db: Database, session: AssignmentSession,
+    page: PageNumber = 1, page_size: PageSize = 20,
+    member_id: UUID | None = None, staff_id: UUID | None = None, is_current: bool | None = None,
+) -> JSONResponse:
+    query = select(CustomerAssignment)
+    if member_id is not None:
+        query = query.where(CustomerAssignment.member_id == member_id)
+    if staff_id is not None:
+        query = query.where(CustomerAssignment.staff_id == staff_id)
+    if is_current is not None:
+        query = query.where(CustomerAssignment.is_current.is_(is_current))
+    total = count_rows(db, query)
+    query = query.order_by(CustomerAssignment.started_at.desc(), CustomerAssignment.id.desc())
+    rows = db.scalars(query.offset((page - 1) * page_size).limit(page_size))
+    items = [AssignmentView.model_validate(assignment) for assignment in rows]
+    return success(request, Page[AssignmentView](items=items, page=page, page_size=page_size, total=total))
+
+
+@router.get("/admin/assignments/candidates", tags=["assignments"], response_model=SuccessEnvelope[Page[AssignmentCandidate]])
+def list_assignment_candidates(
+    request: Request, db: Database, session: AssignmentSession,
+    page: PageNumber = 1, page_size: PageSize = 20, q: SearchText = "",
+) -> JSONResponse:
+    query = eligible_employees()
+    if keyword := q.strip():
+        query = query.where(StaffProfile.display_name.icontains(keyword, autoescape=True))
+    total = count_rows(db, query)
+    query = query.order_by(StaffProfile.display_name, StaffProfile.id)
+    rows = db.scalars(query.offset((page - 1) * page_size).limit(page_size))
+    items = [AssignmentCandidate(id=staff.id, display_name=staff.display_name) for staff in rows]
+    return success(request, Page[AssignmentCandidate](items=items, page=page, page_size=page_size, total=total))
+
+
+@router.post("/customers/{id}/transfer", tags=["assignments"], response_model=SuccessEnvelope[TransferResult])
+def transfer_customer(
+    request: Request, id: UUID, body: TransferRequest, db: Database, session: AssignmentSession,
+) -> JSONResponse:
+    return success(request, change_assignment(db, id, body, session.identity, request.state.request_id))
 
 
 @router.get("/exchange-orders/{id}", tags=["exchange-orders"], response_model=SuccessEnvelope[OrderView])

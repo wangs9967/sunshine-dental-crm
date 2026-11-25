@@ -84,7 +84,7 @@
 | PATCH /customers/{id}/status | R6 | 三类运营状态独立更新，至少传一个字段；返回 Customer。 |
 | GET /customers/{id}/followups | R6 | Followup 列表，筛选 contact_type、from、to。 |
 | POST /customers/{id}/followups | R6 | contact_type、content 必填，可传 followup_at、customer_feedback、effective_contact、gift_given、gift_name、next_followup_at。返回 Followup。家访用 home_visit。 |
-| POST /customers/{id}/transfer | R7 | to_staff_id、reason 必填，expected_assignment_id 用于防止覆盖并发转移。返回当前归属和历史记录 ID。 |
+| POST /customers/{id}/transfer | R7 | 首次分配与转移共用。to_staff_id、reason、expected_assignment_id 均必填，reason 去首尾空白后为 1–500 字。expected_assignment_id 显式传 null 表示无当前归属，传 UUID 表示操作者看到的当前归属记录。成功返回 200，data 含 current_assignment 和 previous_assignment_id（首次分配为 null）。 |
 | GET /followup-tasks | R8 | Task 列表，筛选 status、task_type、assigned_staff_id、from、to，受角色范围限制。 |
 | POST /followup-tasks | R9 | member_id、assigned_staff_id、title、scheduled_at，返回人工 Task。系统生成的复查、唤醒由后台任务执行。 |
 | POST /followup-tasks/{id}/complete、/postpone、/ignore | R8 | 完成或忽略提交 result，延期提交 postponed_until，可附 result。返回更新后的 Task；已完成或已忽略的任务拒绝变更。 |
@@ -101,8 +101,8 @@
 | GET /admin/members、GET /admin/members/{id} | R11 | Member 列表或详情，列表按 q、status、staff_id 过滤。q 支持姓名、会员编号或完整手机号精确检索，staff_id 只匹配当前负责人。 |
 | GET /admin/staff、GET /admin/staff/{id} | R12 | Staff 列表或详情，筛选 role、status、q（员工姓名或编号）。未分配员工编号时 employee_no 为 null。 |
 | POST /admin/staff、PATCH /admin/staff/{id} | R13 | 创建或修改员工档案，含 display_name、employee_no、role、status；管理员账号授权及员工开通流程过审后开放。 |
-| GET /admin/assignments | R7 | 归属列表，含 member_id、staff_id、is_current、bind_source、started_at、ended_at、change_reason，筛选 member_id、staff_id、is_current。 |
-| GET /admin/assignments/candidates | R7 | 在职候选员工列表，仅含 id、display_name，支持 q。 |
+| GET /admin/assignments | R7 | 归属列表，含 id、member_id、staff_id、is_current、bind_source、started_at、ended_at、change_reason、operator_account_id，筛选 member_id、staff_id、is_current。指定会员且 is_current=true 时，空列表表示当前无负责人。 |
+| GET /admin/assignments/candidates | R7 | 按姓名排序的在职候选列表，筛选账号启用的 employee 角色档案。每项仅含 id、display_name，支持 q 按姓名查询。 |
 | GET /admin/followups | R11 | Followup 列表，筛选 member_id、staff_id、contact_type、from、to。客户操作复用 /customers 路径。 |
 | GET /admin/points/accounts、GET /admin/points/records | R11 | PointsAccount 或 PointsRecord 列表，筛选 member_id，流水另可筛选 record_type、from、to。 |
 | POST /admin/points/adjustments | R14 | member_id、delta_points、reason、幂等键；审批方案确认后返回 PointsRecord。 |
@@ -117,13 +117,23 @@
 | GET /admin/roles | R18 | 四角色固定权限说明。目录只读，角色分配受员工管理权限约束。 |
 | GET /admin/audit-logs | R18 | 脱敏日志列表，筛选 module、action、actor_account_id、from、to。 |
 
+### 客户归属写入
+
+服务端在同一事务内核对当前归属、写入新归属和操作审计。首次分配的 `bind_source` 为 `manual`；转移为 `admin_transfer`，原记录的结束时间等于新记录的开始时间。首次来源员工保持原值。
+
+| HTTP | error.code | 条件 |
+|---|---|---|
+| 409 | ASSIGNMENT_CHANGED | 数据库当前归属与 expected_assignment_id 不同 |
+| 409 | ASSIGNMENT_UNCHANGED | 目标员工已是当前负责人 |
+| 422 | STAFF_NOT_ELIGIBLE | 目标并非在职且账号启用的员工 |
+
 ## 兑换与核销错误
 
 | HTTP | error.code | 条件 |
 |---|---|---|
 | 409 | PRODUCT_NOT_AVAILABLE / STOCK_INSUFFICIENT / POINTS_INSUFFICIENT | 商品下架、库存不足或积分不足 |
 | 409 | MONTHLY_LIMIT_EXCEEDED | 同会员同商品的已提交数量加本次数量超过上限；details 可含 remaining_quantity、next_month_start_utc |
-| 409 | IDEMPOTENCY_CONFLICT / VERSION_CONFLICT / ASSIGNMENT_CHANGED | 同键异请求、商品版本不匹配、归属已变化 |
+| 409 | IDEMPOTENCY_CONFLICT / VERSION_CONFLICT | 同键异请求、商品版本不匹配 |
 | 409 | ORDER_ALREADY_VERIFIED | 已核销，订单状态保持不变 |
 | 409 | CREDENTIAL_INVALID / CREDENTIAL_EXPIRED | 凭证无效、已撤销、与订单不符或已过期 |
 | 403 | FEATURE_NOT_AVAILABLE / FORBIDDEN | 业务决策尚未开放，或当前身份没有操作权限 |
