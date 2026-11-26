@@ -5,8 +5,17 @@
   </view>
   <view class="entry-panel">
     <view class="entry-description">新会员登录后填写会员资料。</view>
-    <view wx:if="{{error}}" class="entry-error" role="alert">{{error}}</view>
-    <t-button theme="primary" block loading="{{opening}}" disabled="{{opening}}" bind:tap="login">{{opening ? '正在验证微信身份' : '微信登录'}}</t-button>
+    <view wx:if="{{error && action === 'member'}}" class="entry-error" role="alert">{{error}}</view>
+    <t-button theme="primary" block loading="{{opening && action === 'member'}}" disabled="{{opening}}" bind:tap="login">微信登录</t-button>
+  </view>
+  <view class="entry-panel">
+    <view class="entry-option-title">员工端</view>
+    <view wx:if="{{error && action !== 'member'}}" class="entry-error" role="alert">{{error}}</view>
+    <view class="entry-description" wx:if="{{notice}}">{{notice}}</view>
+    <t-button theme="primary" variant="outline" block loading="{{opening && action === 'employee'}}" disabled="{{opening}}" bind:tap="staffLogin">员工微信登录</t-button>
+    <view class="entry-option">
+      <t-button theme="primary" variant="text" block loading="{{opening && action === 'bind'}}" disabled="{{opening}}" bind:tap="staffBind">扫描员工绑定二维码</t-button>
+    </view>
   </view>
   <view wx:if="{{demoAvailable}}" class="entry-panel">
     <view class="entry-note">演示入口 · 无需微信认证</view>

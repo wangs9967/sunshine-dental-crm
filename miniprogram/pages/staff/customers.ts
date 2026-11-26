@@ -2,6 +2,7 @@ import { entryRoute, navigation } from '../../config/navigation';
 import { getDemoRole } from '../../services/demo-session';
 import { RequestError, errorMessage } from '../../services/request';
 import { customerStatuses, loadCustomers, presentCustomer } from '../../services/staff-customers';
+import { employeeSignedIn } from '../../services/staff-session';
 
 Page({
   requestVersion: 0,
@@ -55,6 +56,7 @@ Page({
   },
   async load() {
     const version = ++this.requestVersion;
+    const wasSignedIn = employeeSignedIn();
     const { query, selections, page } = this.data;
     this.setData({ loading: true, loginRequired: false, error: '', customers: [], hasNext: false });
     try {
@@ -69,6 +71,9 @@ Page({
     } catch (error) {
       if (version !== this.requestVersion) return;
       const loginRequired = error instanceof RequestError && error.status === 401;
+      if (loginRequired && wasSignedIn && !employeeSignedIn()) {
+        wx.reLaunch({ url: entryRoute + '?employeeExpired=1' });
+      }
       this.setData({
         loginRequired,
         error: loginRequired && getDemoRole() === 'employee' ? '演示身份无法读取客户资料。' : errorMessage(error),

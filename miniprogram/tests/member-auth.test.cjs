@@ -12,7 +12,7 @@ const realSession = {
 };
 const signup = { ...realSession, selected_role: null, registration_required: true };
 
-function harness(responses, storage = new Map()) {
+function harness(responses, storage = new Map(), scanResult = '') {
   const routes = [];
   const requests = [];
   const modals = [];
@@ -22,6 +22,7 @@ function harness(responses, storage = new Map()) {
     wx: {
       getAccountInfoSync: () => ({ miniProgram: { envVersion: 'develop' } }),
       login: (options) => options.success({ code: 'fixture-code' }),
+      scanCode: (options) => options.success({ result: scanResult }),
       getStorageSync: (key) => storage.get(key),
       setStorageSync: (key, value) => storage.set(key, value),
       removeStorageSync: (key) => storage.delete(key),
@@ -64,8 +65,55 @@ function harness(responses, storage = new Map()) {
   }
 
   return { page, routes, requests, modals, storage, session: load(path.join(root, 'services/member-session.ts')),
-    staff: load(path.join(root, 'services/staff-customers.ts')) };
+    staff: load(path.join(root, 'services/staff-customers.ts')),
+    employee: load(path.join(root, 'services/staff-session.ts')) };
 }
+
+const employeeSession = { ...realSession, selected_role: 'employee' };
+
+test('employee binds from a scanned invitation then explicitly logs in, restores and logs out', async () => {
+  const qr = 'sunshine-staff-bind:v1:11111111-1111-1111-1111-111111111111.' + 'A'.repeat(43);
+  const env = harness([{ data: { wechat_bound: true } }, { data: employeeSession }], new Map(), qr);
+  const entry = env.page('pages/auth/index.ts');
+  await entry.staffBind();
+  assert.match(env.requests[0].url, /\/auth\/wechat\/staff-bind$/);
+  assert.equal(env.requests[0].data.invitation, qr);
+  assert.equal(env.requests[0].data.code, 'fixture-code');
+  assert.match(entry.data.notice, /已绑定/);
+  assert.equal(env.storage.size, 0);
+  await entry.staffLogin();
+  assert.equal(env.requests[1].data.role, 'employee');
+  assert.equal(env.routes.at(-1), '/pages/staff/dashboard');
+  assert.deepEqual([...env.storage], [['sunshine-staff-restore', true]]);
+  const restarted = harness([
+    { data: employeeSession }, { data: { display_name: '验收员工', role: 'employee' } }, { data: { logged_out: true } },
+  ], env.storage);
+  restarted.page('pages/index/index.ts').onLoad();
+  assert.equal(restarted.routes.at(-1), '/pages/auth/index?restore=employee');
+  await restarted.page('pages/auth/index.ts').onLoad({ restore: 'employee' });
+  assert.equal(restarted.requests[0].data.role, 'employee');
+  assert.equal(restarted.routes.at(-1), '/pages/staff/dashboard');
+  assert.equal((await restarted.employee.loadStaffProfile()).display_name, '验收员工');
+  await restarted.employee.logoutEmployee();
+  assert.match(restarted.requests.at(-1).url, /\/auth\/logout$/);
+  assert.equal(restarted.storage.size, 0);
+  assert.equal(restarted.employee.employeeSignedIn(), false);
+});
+
+test('staff refresh coalesces and rejected staff refresh returns customer list to login', async () => {
+  const unauthorized = { status: 401, error: { code: 'INVALID_SESSION', message: '登录失效' } };
+  const env = harness([{ data: employeeSession }, unauthorized, unauthorized,
+    { data: { ...employeeSession, access_token: 'rotated' } }, { data: {} }, { data: {} },
+    unauthorized, unauthorized]);
+  await env.page('pages/auth/index.ts').staffLogin();
+  await Promise.all([env.employee.loadStaffProfile(), env.employee.loadStaffProfile()]);
+  assert.equal(env.requests.filter(({ url }) => url.endsWith('/auth/refresh')).length, 1);
+  assert.equal(env.requests[4].header.Authorization, 'Bearer rotated');
+  await env.page('pages/staff/customers.ts').onShow();
+  assert.equal(env.employee.employeeSignedIn(), false);
+  assert.equal(env.routes.at(-1), '/pages/auth/index?employeeExpired=1');
+  assert.equal(env.storage.size, 0);
+});
 
 test('staff list requires a staff session and sends searches and status filters to the API', async () => {
   const customer = {

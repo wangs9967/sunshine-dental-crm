@@ -44,6 +44,7 @@ class SessionRecord(BaseModel):
     revoked_at: int | None = None
     access_digest: str
     refresh_digest: str
+    employee_generation: str | None = None
 
     def active(self, now: int) -> bool:
         return self.revoked_at is None and self.expires_at > now
@@ -88,6 +89,16 @@ class SessionService:
     def _tokens() -> tuple[str, str]:
         return secrets.token_urlsafe(32), secrets.token_urlsafe(32)
 
+    @staticmethod
+    def _employee_key(account_id: UUID) -> str:
+        return f"{KEY_PREFIX}:employee-generation:{account_id}"
+
+    def revoke_employee(self, account_id: UUID) -> None:
+        try:
+            self.cache.set(self._employee_key(account_id), uuid4().hex)
+        except RedisError:
+            raise unavailable() from None
+
     def _reference(self, kind: str, token: str) -> SessionReference:
         token_digest = digest(token)
         try:
@@ -96,7 +107,13 @@ class SessionService:
                 raise RejectedSession()
             if not isinstance(key, str) or not key.startswith(f"{KEY_PREFIX}:session:"):
                 raise unavailable()
-            return SessionReference(key, token_digest, self._read(self.cache.get(key)))
+            record = self._read(self.cache.get(key))
+            if record.selected_role == "employee" and (
+                not record.employee_generation
+                or self.cache.get(self._employee_key(record.account_id)) != record.employee_generation
+            ):
+                raise RejectedSession()
+            return SessionReference(key, token_digest, record)
         except RedisError:
             raise unavailable() from None
 
@@ -111,6 +128,13 @@ class SessionService:
             access_digest=digest(access), refresh_digest=digest(refresh),
         )
         try:
+            if selected_role == "employee":
+                generation_key = self._employee_key(account_id)
+                self.cache.set(generation_key, uuid4().hex, nx=True)
+                generation = self.cache.get(generation_key)
+                if not isinstance(generation, str) or not generation:
+                    raise unavailable()
+                record.employee_generation = generation
             with self.cache.pipeline() as pipe:
                 pipe.set(key, record.model_dump_json(), exat=record.expires_at)
                 pipe.set(self._token_key("access", record.access_digest), key, exat=record.access_expires_at)
@@ -157,6 +181,11 @@ class SessionService:
                     try:
                         pipe.watch(reference.key)
                         record = self._read(pipe.get(reference.key))
+                        if record.selected_role == "employee":
+                            generation_key = self._employee_key(record.account_id)
+                            pipe.watch(generation_key)
+                            if not record.employee_generation or pipe.get(generation_key) != record.employee_generation:
+                                raise RejectedSession()
                         now = int(time.time())
                         replay = action != "logout" and record.refresh_digest != reference.token_digest
                         if not record.active(now) or (action == "replay" and not replay):

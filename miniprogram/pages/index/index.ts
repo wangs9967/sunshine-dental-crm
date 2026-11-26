@@ -1,5 +1,6 @@
 import { entryRoute } from '../../config/navigation';
 import { shouldRestoreMember } from '../../services/member-session';
+import { shouldRestoreEmployee } from '../../services/staff-session';
 
 Page({
   onLoad() {
@@ -9,6 +10,7 @@ Page({
     this.openEntry();
   },
   openEntry() {
-    wx.redirectTo({ url: shouldRestoreMember() ? `${entryRoute}?restore=1` : entryRoute });
+    const restore = shouldRestoreEmployee() ? 'employee' : shouldRestoreMember() ? '1' : '';
+    wx.redirectTo({ url: restore ? `${entryRoute}?restore=${restore}` : entryRoute });
   },
 });

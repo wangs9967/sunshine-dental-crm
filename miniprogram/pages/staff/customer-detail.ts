@@ -1,6 +1,7 @@
 import { entryRoute } from '../../config/navigation';
 import { RequestError, errorMessage } from '../../services/request';
 import { loadCustomer, presentCustomer } from '../../services/staff-customers';
+import { employeeSignedIn } from '../../services/staff-session';
 
 const listUrl = '/pages/staff/customers';
 
@@ -29,6 +30,7 @@ Page({
   },
   async load() {
     const version = ++this.requestVersion;
+    const wasSignedIn = employeeSignedIn();
     const { id } = this.data;
     if (!/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i.test(id)) {
       this.setData({ loading: false, unavailable: true, error: '客户不存在。' });
@@ -41,6 +43,9 @@ Page({
     } catch (error) {
       if (version !== this.requestVersion) return;
       const status = error instanceof RequestError ? error.status : 0;
+      if (status === 401 && wasSignedIn && !employeeSignedIn()) {
+        wx.reLaunch({ url: entryRoute + '?employeeExpired=1' });
+      }
       this.setData({ error: errorMessage(error), loginRequired: status === 401, unavailable: status === 404 });
     } finally {
       if (version === this.requestVersion) this.setData({ loading: false });

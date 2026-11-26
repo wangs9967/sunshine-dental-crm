@@ -2,10 +2,11 @@ import { Button, Card, Descriptions, Input, Select, Space, Table } from 'antd';
 import { useState } from 'react';
 import type { Navigate } from '../App';
 import { EmptyState, ErrorState, LoadingState, StatusTag } from '../components/page';
+import { OpenStaff, StaffAccount } from '../components/staff';
+import type { Staff } from '../components/staff';
 import type { AdminSession } from '../session';
 import { useAdminRead as useRead } from '../useAdminRead';
 
-type Staff = { id: string; display_name: string; employee_no: string | null; role: string; status: string };
 type Member = {
   id: string; name: string; member_no: string; birthday: string; phone_masked: string;
   registered_at: string; status: string;
@@ -86,6 +87,8 @@ function DirectoryList({ base, session, navigate, onExpired }: Omit<PageProps, '
             setStaffSearch('');
             setSearch({ ...search, filters: { q: '' }, page: 1 });
           }}>重置</Button>
+          {!member && <OpenStaff session={session} onExpired={onExpired}
+            onCreated={(staff) => navigate(base + '/' + staff.id)} />}
         </Space>
       </form>
     </Card>
@@ -105,6 +108,8 @@ function DirectoryList({ base, session, navigate, onExpired }: Omit<PageProps, '
             member ? { title: '脱敏手机号', render: (_, row) => 'phone_masked' in row && row.phone_masked }
               : { title: '角色', render: (_, row) => 'role' in row && roleLabel(row.role) },
             { title: member ? '会员状态' : '任职状态', render: (_, row) => <ProfileStatus status={row.status} member={member} /> },
+            ...(!member ? [{ title: '微信绑定', render: (_: unknown, row: Member | Staff) =>
+              'wechat_bound' in row && (row.wechat_bound ? '已绑定' : '未绑定') }] : []),
             ...(member ? [{ title: '注册时间', render: (_: unknown, row: Member | Staff) =>
               'registered_at' in row && dateTime.format(new Date(row.registered_at)) }] : []),
           ]} />}
@@ -138,9 +143,9 @@ function DirectoryDetail({ base, path, session, navigate, onExpired }: Omit<Page
           <Descriptions.Item label="员工编号">{row.employee_no ?? '—'}</Descriptions.Item>
           <Descriptions.Item label="姓名">{row.display_name}</Descriptions.Item>
           <Descriptions.Item label="角色">{roleLabel(row.role)}</Descriptions.Item>
-          <Descriptions.Item label="任职状态"><ProfileStatus status={row.status} member={false} /></Descriptions.Item>
         </Descriptions>}
       </Card> : <LoadingState />}
+    {row && 'wechat_bound' in row && <StaffAccount key={row.id} initial={row} session={session} onExpired={onExpired} />}
   </Space>;
 }
 

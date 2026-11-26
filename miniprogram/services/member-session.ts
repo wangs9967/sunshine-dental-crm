@@ -1,5 +1,5 @@
 import { memberRegistrationRoute, workspacePath } from '../config/navigation';
-import { RequestError, request } from './request';
+import { RequestError, request, wechatCode } from './request';
 
 export { errorMessage, RequestError } from './request';
 
@@ -66,6 +66,11 @@ export function memberState() {
   return session?.registration_required ? 'registration' : session?.selected_role;
 }
 
+export function forgetMemberSession() {
+  clearSession();
+  sceneToken = undefined;
+}
+
 async function authorized<T>(path: string, method: 'GET' | 'POST', data?: WechatMiniprogram.IAnyObject): Promise<T> {
   const active = session;
   if (!active) throw new RequestError(401, 'INVALID_SESSION', '请重新微信登录。');
@@ -99,10 +104,7 @@ async function authorized<T>(path: string, method: 'GET' | 'POST', data?: Wechat
 }
 
 export async function loginWithWechat(): Promise<string> {
-  const code = await new Promise<string>((resolve, reject) => wx.login({
-    success: (result) => result.code ? resolve(result.code) : reject(new Error('未取得微信登录凭据，请重试。')),
-    fail: () => reject(new Error('微信登录失败，请重试。')),
-  }));
+  const code = await wechatCode();
   session = await request<Session>('/auth/wechat/login', 'POST', { code, scene_token: sceneToken });
   rememberMemberLogin(session.selected_role === 'member' && !session.registration_required);
   if (!session.registration_required) sceneToken = undefined;
@@ -131,6 +133,5 @@ export async function logoutMember(): Promise<void> {
   } catch (error) {
     if (!(error instanceof RequestError) || error.status !== 401) throw error;
   }
-  clearSession();
-  sceneToken = undefined;
+  forgetMemberSession();
 }

@@ -29,7 +29,7 @@
 |---|---|
 | Session | access_token、refresh_token、expires_in、account_id、selected_role、available_roles、registration_required |
 | Member | id、member_no、name、birthday、phone_masked、status、registered_at；管理详情另含 source_employee_id、source_employee_name、current_staff_id、current_staff_name，以及 visit_status、consume_status、deal_status。无对应资料时相关字段为 null |
-| Staff | id、employee_no、display_name、role、status |
+| Staff | id、employee_no、display_name、role、status；后台查询和写入结果另含 wechat_bound（布尔值） |
 | Customer | Member 的运营视图，另含 visit_status、consume_status、deal_status、last_effective_contact_at、next_recall_at、current_staff_id |
 | Followup | id、member_id、staff_id、contact_type、followup_at、content、customer_feedback、effective_contact、gift_given、gift_name、next_followup_at |
 | Task | id、member_id、assigned_staff_id、task_type、status、title、scheduled_at、postponed_until、result、completed_at |
@@ -42,12 +42,13 @@
 
 | 方法与路径 | 权限组 | 请求和响应 |
 |---|---|---|
-| POST /auth/wechat/login | 公开 | code 必填，可携带 scene_token。服务端向微信换取 OpenID，返回 Session。已注册会员直接登录，首次注册时由小程序再次提交来源码。凭据无效返回 400 WECHAT_CODE_INVALID，微信服务异常返回 502 WECHAT_UNAVAILABLE。 |
+| POST /auth/wechat/login | 公开 | code 必填。role 缺省或为 member 时沿用会员流程，可携带 scene_token；role=employee 时仅为已绑定、账号启用且在职的普通员工返回 employee Session，资格不符返回 403 EMPLOYEE_ACCOUNT_UNAVAILABLE。服务端向微信换取 OpenID；凭据无效返回 400 WECHAT_CODE_INVALID，微信服务异常返回 502 WECHAT_UNAVAILABLE。 |
+| POST /auth/wechat/staff-bind | 一次性邀请 | code、invitation（扫描到的完整字符串）必填。服务端向微信换取 OpenID 并原子消费绑定邀请；成功返回 wechat_bound=true，员工随后使用新的微信 code 登录。过期、重放、旧邀请返回 409 STAFF_INVITATION_INVALID，身份冲突返回 409 STAFF_BINDING_CONFLICT。 |
 | POST /auth/admin/login | 公开 | username、password。验证启用账号及在职店长或管理员档案，通过后返回 Session。凭据或资格校验失败统一返回 401 INVALID_CREDENTIALS。限流返回 429 LOGIN_RATE_LIMITED 和 Retry-After。 |
 | POST /auth/refresh | 持有效刷新会话 | refresh_token，轮换令牌并返回 Session。 |
 | POST /auth/logout | 已认证 | 撤销当前会话，返回 logged_out。 |
-| GET /auth/me | 已认证 | account_id、selected_role、available_roles、registration_required。角色切换必须经服务端重新授权；员工开通与登录方式按评审门槛开通。 |
-| POST /auth/select-role | 已认证 | role 必须在当前渠道和账号实际授权的 available_roles 中；重新签发 Session 并撤销旧会话。员工身份切换随开通规则生效。 |
+| GET /auth/me | 已认证 | account_id、selected_role、available_roles、registration_required。会员与员工分别显式登录；每个会话只暴露该登录身份。 |
+| POST /auth/select-role | 待开放 | 保留契约。本阶段使用会员、员工各自的登录入口。 |
 | GET /clinic-profile | 公开 | 门诊名称、联系电话、地址、导航坐标、隐私协议和服务协议入口。仅返回公开配置。 |
 | POST /members/register | R1 | name、birthday、phone 必填，可选 scene_token。返回 201，data 包含 Member 字段及 `session` 和 `source_status`。重复注册返回 409 MEMBER_ALREADY_REGISTERED。有效首次扫码建立首次归属。 |
 | GET /members/me | R2 | 返回本人 Member。 |
@@ -100,7 +101,9 @@
 | GET /admin/dashboard | R11 | 返回会员数、待跟进任务数、上架商品数、待核销订单数，附 as_of。 |
 | GET /admin/members、GET /admin/members/{id} | R11 | Member 列表或详情，列表按 q、status、staff_id 过滤。q 支持姓名、会员编号或完整手机号精确检索，staff_id 只匹配当前负责人。 |
 | GET /admin/staff、GET /admin/staff/{id} | R12 | Staff 列表或详情，筛选 role、status、q（员工姓名或编号）。未分配员工编号时 employee_no 为 null。 |
-| POST /admin/staff、PATCH /admin/staff/{id} | R13 | 创建或修改员工档案，含 display_name、employee_no、role、status；管理员账号授权及员工开通流程过审后开放。 |
+| POST /admin/staff | R13 管理员 | display_name、employee_no 必填。只开通普通员工，服务端设置 role=employee、status=active。成功返回 201 和 Staff，重复工号返回 409 EMPLOYEE_NO_EXISTS。 |
+| POST /admin/staff/{id}/wechat-invitation | R13 管理员 | 为未绑定且在职的普通员工生成二维码，返回 qr_payload、expires_at。有效期 600 秒，新签发覆盖旧邀请。二维码值仅供现场扫描，响应不缓存。目标不符合条件返回 409 STAFF_INVITATION_NOT_AVAILABLE。 |
+| PATCH /admin/staff/{id} | R13 管理员 | 请求体仅允许 status（active 或 disabled），返回 Staff。仅可停用或重新启用普通员工。员工会话即时失效，会员会话保留。重新启用后须重新员工登录。 |
 | GET /admin/assignments | R7 | 归属列表，含 id、member_id、staff_id、staff_name、is_current、bind_source、started_at、ended_at、change_reason、operator_account_id，筛选 member_id、staff_id、is_current。指定会员且 is_current=true 时，空列表表示当前无负责人。staff_name 为对应员工档案的姓名，转移响应的 current_assignment 同样包含该字段。 |
 | GET /admin/assignments/candidates | R7 | 按姓名排序的在职候选列表，筛选账号启用的 employee 角色档案。每项仅含 id、display_name，支持 q 按姓名查询。 |
 | GET /admin/followups | R11 | Followup 列表，筛选 member_id、staff_id、contact_type、from、to。客户操作复用 /customers 路径。 |

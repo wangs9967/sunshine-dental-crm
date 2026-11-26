@@ -1,6 +1,6 @@
 from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Annotated
+from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
@@ -21,6 +21,7 @@ from app.config import AuthSettings
 from app.db.models import Member, OperationLog, PointsAccount
 from app.db.session import get_db
 from app.http import APIError, SuccessEnvelope, error, success
+from app.staff_accounts import bind_employee, employee_login, invitation_target
 
 router = APIRouter(prefix="/api/v1/auth", tags=["auth"])
 members_router = APIRouter(prefix="/api/v1/members", tags=["members"])
@@ -49,6 +50,17 @@ class WechatLoginRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     code: SecretStr = Field(min_length=1, max_length=256)
     scene_token: SecretStr | None = Field(default=None, max_length=256)
+    role: Literal["member", "employee"] = "member"
+
+
+class StaffBindRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    code: SecretStr = Field(min_length=1, max_length=256)
+    invitation: SecretStr = Field(min_length=1, max_length=128)
+
+
+class StaffBindResult(BaseModel):
+    wechat_bound: bool = True
 
 
 class RefreshRequest(BaseModel):
@@ -162,12 +174,24 @@ def wechat_login(request: Request, body: WechatLoginRequest, service: Sessions, 
                  settings: Settings) -> JSONResponse:
     openid = exchange_code(body.code.get_secret_value(), settings)
     try:
-        identity = login_identity(db, openid)
-        pair = service.issue(identity.account_id, identity.selected_role, "miniprogram")
+        if body.role == "employee":
+            identity, pair = employee_login(db, service, openid)
+        else:
+            identity = login_identity(db, openid)
+            pair = service.issue(identity.account_id, identity.selected_role, "miniprogram")
     except SQLAlchemyError:
         raise unavailable() from None
     audit(db, request, "wechat_login", "success", identity, channel="miniprogram")
     return success(request, session_payload(identity, pair))
+
+
+@router.post("/wechat/staff-bind", response_model=SuccessEnvelope[StaffBindResult])
+def staff_bind(request: Request, body: StaffBindRequest, service: Sessions, db: Database, settings: Settings) -> JSONResponse:
+    invitation = body.invitation.get_secret_value()
+    staff_id = invitation_target(service, invitation)
+    openid = exchange_code(body.code.get_secret_value(), settings)
+    bind_employee(db, service, staff_id, invitation, openid, request.state.request_id)
+    return success(request, StaffBindResult())
 
 
 @members_router.post("/register", status_code=201, response_model=SuccessEnvelope[RegistrationPayload])

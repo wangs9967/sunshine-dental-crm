@@ -26,7 +26,7 @@ EXPECTED: dict[Permission, set[Role | None]] = {
     "R1": {None}, "R2": {"member"}, "R3": set(), "R4": {"member"}, "R5": {"employee", "manager", "admin"},
     "R6": {"employee", "manager", "admin"}, "R7": {"manager", "admin"}, "R8": {"employee", "manager", "admin"},
     "R9": {"manager", "admin"}, "R10": {"manager", "admin"}, "R11": {"manager", "admin"},
-    "R12": {"manager", "admin"}, "R13": set(), "R14": set(), "R15": {"admin"}, "R16": {"admin"},
+    "R12": {"manager", "admin"}, "R13": {"admin"}, "R14": set(), "R15": {"admin"}, "R16": {"admin"},
     "R17": {"admin"}, "R17_WRITE": set(), "R18": {"admin"}, "R18_WRITE": set(),
 }
 
@@ -207,7 +207,6 @@ def test_member_order_lookup_never_uses_supplied_member_id(auth: AuthFixture, ph
 @pytest.mark.parametrize(("permission", "role", "code"), [
     ("R10", "employee", "FEATURE_NOT_AVAILABLE"),
     ("R13", "manager", "FEATURE_NOT_AVAILABLE"),
-    ("R13", "admin", "FEATURE_NOT_AVAILABLE"),
     ("R14", "admin", "FEATURE_NOT_AVAILABLE"),
     ("R15", "manager", "FEATURE_NOT_AVAILABLE"),
     ("R16", "manager", "FEATURE_NOT_AVAILABLE"),

@@ -120,6 +120,10 @@ export class AdminSession {
     return this.request<T>('/admin' + path, { signal });
   }
 
+  async writeStaff<T>(path: string, method: 'POST' | 'PATCH', body?: object): Promise<T> {
+    return this.request<T>('/admin/staff' + path, { method, body: body && JSON.stringify(body) });
+  }
+
   async transferCustomer(memberId: string, data: {
     to_staff_id: string;
     expected_assignment_id: string | null;

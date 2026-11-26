@@ -33,3 +33,10 @@ export function request<T>(path: string, method: 'GET' | 'POST', data?: WechatMi
 export function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : '操作失败，请重试。';
 }
+
+export function wechatCode(): Promise<string> {
+  return new Promise((resolve, reject) => wx.login({
+    success: (result) => result.code ? resolve(result.code) : reject(new Error('未取得微信登录凭据，请重试。')),
+    fail: () => reject(new Error('微信登录失败，请重试。')),
+  }));
+}

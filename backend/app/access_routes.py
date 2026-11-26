@@ -11,20 +11,23 @@ from app.assignments import (
     AssignmentCandidate, AssignmentView, TransferRequest, TransferResult, change_assignment, eligible_employees,
 )
 from app.auth.member import MemberView
-from app.auth.routes import Authenticated, Database, MemberSession, Settings, require_permission
+from app.auth.routes import Authenticated, Database, MemberSession, Sessions, Settings, require_permission
 from app.auth.scopes import current_customer_assignment, customer_scope, own_customer_scope, owned_order
-from app.db.models import CustomerAssignment, CustomerStatus, Member, StaffProfile
+from app.db.models import Account, CustomerAssignment, CustomerStatus, Member, StaffProfile
 from app.directory import (
     AdminMemberView, CustomerView, Page, StaffView, admin_member_detail, count_rows, customer_detail, customer_view,
     customers, member_search, member_view,
 )
 from app.http import APIError, SuccessEnvelope, success
+from app.staff_accounts import AdminStaffView, BindingInvitation, StaffCreate, StaffStatus, create_staff, issue_invitation, set_staff_status
 
 router = APIRouter(prefix="/api/v1")
 CustomerSession = Annotated[Authenticated, Depends(require_permission("R6"))]
 AssignmentSession = Annotated[Authenticated, Depends(require_permission("R7"))]
 AdminMemberSession = Annotated[Authenticated, Depends(require_permission("R11"))]
 AdminStaffSession = Annotated[Authenticated, Depends(require_permission("R12"))]
+StaffWriteSession = Annotated[Authenticated, Depends(require_permission("R13"))]
+StaffSelfSession = Annotated[Authenticated, Depends(require_permission("R5"))]
 PageNumber = Annotated[int, Query(ge=1, le=2147483647)]
 PageSize = Annotated[int, Query(ge=1, le=100)]
 SearchText = Annotated[str, Query(max_length=80)]
@@ -97,13 +100,13 @@ def read_admin_member(request: Request, id: UUID, db: Database, session: AdminMe
     return success(request, admin_member_detail(db, id, settings))
 
 
-@router.get("/admin/staff", tags=["admin"], response_model=SuccessEnvelope[Page[StaffView]])
+@router.get("/admin/staff", tags=["admin"], response_model=SuccessEnvelope[Page[AdminStaffView]])
 def list_admin_staff(
     request: Request, db: Database, session: AdminStaffSession,
     page: PageNumber = 1, page_size: PageSize = 20, q: SearchText = "",
     role: Literal["employee", "manager", "admin"] | None = None, status: ProfileStatus | None = None,
 ) -> JSONResponse:
-    query = select(StaffProfile)
+    query = select(StaffProfile, Account).join(Account, Account.id == StaffProfile.account_id)
     if keyword := q.strip():
         query = query.where(or_(
             StaffProfile.display_name.icontains(keyword, autoescape=True),
@@ -114,14 +117,38 @@ def list_admin_staff(
     if status is not None:
         query = query.where(StaffProfile.status == status)
     total = count_rows(db, query)
-    rows = db.scalars(query.order_by(StaffProfile.created_at.desc(), StaffProfile.id.desc()).offset((page - 1) * page_size).limit(page_size))
-    items = [StaffView.model_validate(staff) for staff in rows]
-    return success(request, Page[StaffView](items=items, page=page, page_size=page_size, total=total))
+    rows = db.execute(query.order_by(StaffProfile.created_at.desc(), StaffProfile.id.desc()).offset((page - 1) * page_size).limit(page_size))
+    items = [AdminStaffView.of(staff, account) for staff, account in rows]
+    return success(request, Page[AdminStaffView](items=items, page=page, page_size=page_size, total=total))
 
 
-@router.get("/admin/staff/{id}", tags=["admin"], response_model=SuccessEnvelope[StaffView])
+@router.get("/admin/staff/{id}", tags=["admin"], response_model=SuccessEnvelope[AdminStaffView])
 def read_admin_staff(request: Request, id: UUID, db: Database, session: AdminStaffSession) -> JSONResponse:
     staff = db.get(StaffProfile, id)
+    if staff is None:
+        raise APIError(404, "NOT_FOUND", "员工档案不存在")
+    return success(request, AdminStaffView.of(staff, db.get_one(Account, staff.account_id)))
+
+
+@router.post("/admin/staff", tags=["admin"], status_code=201, response_model=SuccessEnvelope[AdminStaffView])
+def open_staff(request: Request, body: StaffCreate, db: Database, session: StaffWriteSession) -> JSONResponse:
+    return success(request, create_staff(db, body, session.identity, request.state.request_id), status=201)
+
+
+@router.post("/admin/staff/{id}/wechat-invitation", tags=["admin"], response_model=SuccessEnvelope[BindingInvitation])
+def invite_staff(request: Request, id: UUID, db: Database, session: StaffWriteSession, sessions: Sessions) -> JSONResponse:
+    return success(request, issue_invitation(db, sessions, id, session.identity, request.state.request_id))
+
+
+@router.patch("/admin/staff/{id}", tags=["admin"], response_model=SuccessEnvelope[AdminStaffView])
+def update_staff_status(request: Request, id: UUID, body: StaffStatus, db: Database,
+                        session: StaffWriteSession, sessions: Sessions) -> JSONResponse:
+    return success(request, set_staff_status(db, sessions, id, body.status, session.identity, request.state.request_id))
+
+
+@router.get("/staff/me", tags=["staff"], response_model=SuccessEnvelope[StaffView])
+def read_staff_self(request: Request, db: Database, session: StaffSelfSession) -> JSONResponse:
+    staff = db.scalar(select(StaffProfile).where(StaffProfile.account_id == session.identity.account_id))
     if staff is None:
         raise APIError(404, "NOT_FOUND", "员工档案不存在")
     return success(request, StaffView.model_validate(staff))

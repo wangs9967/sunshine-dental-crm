@@ -5,6 +5,18 @@
       <view class="workspace-title">{{title}}</view>
     </view>
     <view class="workspace-empty" wx:if="{{points !== ''}}">当前积分：{{points}} 分</view>
+    <view wx:if="{{realEmployee && staffError}}" class="workspace-panel">
+      <view>{{staffError}}</view>
+      <t-button size="small" variant="outline" bind:tap="fetchStaffProfile">重试</t-button>
+    </view>
+    <view wx:elif="{{realEmployee && path === '/pages/staff/profile'}}" class="workspace-panel">
+      <block wx:if="{{staffProfile}}">
+        <view class="workspace-row"><text>姓名</text><text>{{staffProfile.display_name}}</text></view>
+        <view class="workspace-row"><text>工号</text><text>{{staffProfile.employee_no || '—'}}</text></view>
+        <view class="workspace-row"><text>状态</text><text>在职</text></view>
+      </block>
+      <view wx:else>正在读取员工资料…</view>
+    </view>
     <view class="workspace-empty" wx:if="{{emptyText}}">{{emptyText}}</view>
     <view class="workspace-panel" wx:if="{{links.length}}">
       <view class="workspace-heading">快捷入口</view>
@@ -14,7 +26,7 @@
       </navigator>
     </view>
     <t-button wx:if="{{backUrl}}" theme="primary" variant="outline" block bind:tap="returnToParent">返回上一页</t-button>
-    <t-button wx:else theme="primary" variant="outline" block loading="{{logoutPending}}" disabled="{{logoutPending}}" bind:tap="returnToEntry">{{realMember ? '退出登录' : '切换演示身份'}}</t-button>
+    <t-button wx:else theme="primary" variant="outline" block loading="{{logoutPending}}" disabled="{{logoutPending}}" bind:tap="returnToEntry">{{realMember || realEmployee ? '退出登录' : '切换演示身份'}}</t-button>
     <view wx:if="{{tabs.length}}" class="workspace-tabs" aria-label="{{roleLabel}}导航">
       <block wx:for="{{tabs}}" wx:key="path">
         <view wx:if="{{path === item.path}}" class="workspace-tab workspace-current" aria-label="{{item.label}}，当前页面">{{item.label}}</view>

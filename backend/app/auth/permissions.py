@@ -25,7 +25,7 @@ ALLOWED: dict[Permission, frozenset[Role | None]] = {
     "R10": MANAGEMENT,
     "R11": MANAGEMENT,
     "R12": MANAGEMENT,
-    "R13": frozenset(),
+    "R13": frozenset({"admin"}),
     "R14": frozenset(),
     "R15": frozenset({"admin"}),
     "R16": frozenset({"admin"}),
@@ -38,7 +38,7 @@ ALLOWED: dict[Permission, frozenset[Role | None]] = {
 PENDING: dict[Permission, frozenset[Role | None]] = {
     "R3": MEMBER,
     "R10": frozenset({"employee"}),
-    "R13": MANAGEMENT,
+    "R13": frozenset({"manager"}),
     "R14": MANAGEMENT,
     "R15": frozenset({"manager"}),
     "R16": frozenset({"manager"}),

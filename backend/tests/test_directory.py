@@ -78,7 +78,7 @@ def test_management_directories(auth: AuthFixture, phones: None, role: Role) -> 
         assert result["items"][0]["id"] == str(second_staff)
     assert auth.client.get(staff, headers=headers, params={"q": prefix, "role": "manager"}).json()["data"]["total"] == 0
     staff_detail = auth.client.get(f"{staff}/{second_staff}", headers=headers)
-    assert set(staff_detail.json()["data"]) == {"id", "employee_no", "display_name", "role", "status"}
+    assert set(staff_detail.json()["data"]) == {"id", "employee_no", "display_name", "role", "status", "wechat_bound"}
     for base in (members, staff):
         assert_error(auth.client.get(f"{base}/{uuid4()}", headers=headers), 404, "NOT_FOUND")
         assert_error(auth.client.get(base, headers=headers, params={"page_size": 101}), 422, "VALIDATION_ERROR")
