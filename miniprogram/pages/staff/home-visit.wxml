@@ -1,1 +1,2 @@
-<workspace-shell />
+<import src="./followup-form.wxml" />
+<template is="followupForm" data="{{home, id, types, typeIndex, content, busy, error, available}}" />

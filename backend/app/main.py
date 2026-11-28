@@ -9,6 +9,7 @@ from app.auth.routes import members_router, router
 from app.auth.sessions import SessionService
 from app.config import AuthSettings
 from app.db.session import database_engine
+from app.followups import router as followup_router
 from app.http import install_http_handlers
 
 
@@ -37,6 +38,7 @@ install_http_handlers(app)
 app.include_router(router)
 app.include_router(members_router)
 app.include_router(access_router)
+app.include_router(followup_router)
 
 
 @app.get("/health")

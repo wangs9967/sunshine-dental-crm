@@ -4,7 +4,7 @@ import secrets
 import socket
 import subprocess
 import time
-from collections.abc import Iterator
+from collections.abc import Generator, Iterator
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
 from dataclasses import dataclass
@@ -54,6 +54,10 @@ def container(image: str, port: int, *options: str, env: dict[str, str] | None =
 def auth_infrastructure() -> Iterator[tuple[Engine, int]]:
     if os.environ.get("SUNSHINE_TEST_AUTH") != "1":
         pytest.skip("Set SUNSHINE_TEST_AUTH=1 to start isolated Redis 7 and PostgreSQL 16")
+    yield from isolated_auth_services()
+
+
+def isolated_auth_services() -> Generator[tuple[Engine, int], None, None]:
     password = secrets.token_urlsafe(24)
     with (
         container(
@@ -79,7 +83,7 @@ def auth_infrastructure() -> Iterator[tuple[Engine, int]]:
             tables = (
                 "accounts", "members", "staff_profiles", "operation_logs", "employee_qr_tokens",
                 "customer_assignments", "customer_status", "points_accounts",
-                "followup_tasks", "products", "exchange_orders",
+                "followup_tasks", "followup_records", "products", "exchange_orders",
             )
             Base.metadata.create_all(engine, tables=[Base.metadata.tables[name] for name in tables])
             yield engine, redis_port

@@ -31,8 +31,8 @@
 | Member | id、member_no、name、birthday、phone_masked、status、registered_at；管理详情另含 source_employee_id、source_employee_name、current_staff_id、current_staff_name，以及 visit_status、consume_status、deal_status。无对应资料时相关字段为 null |
 | Staff | id、employee_no、display_name、role、status；后台查询和写入结果另含 wechat_bound（布尔值） |
 | Customer | Member 的运营视图，另含 visit_status、consume_status、deal_status、last_effective_contact_at、next_recall_at、current_staff_id |
-| Followup | id、member_id、staff_id、contact_type、followup_at、content、customer_feedback、effective_contact、gift_given、gift_name、next_followup_at |
-| Task | id、member_id、assigned_staff_id、task_type、status、title、scheduled_at、postponed_until、result、completed_at |
+| Followup | id、member_id、staff_id、contact_type、followup_at、content、customer_feedback、effective_contact、gift_given、gift_name、next_followup_at；后台列表另含 member_name、staff_name |
+| Task | id、member_id、assigned_staff_id、task_type、status、title、scheduled_at、postponed_until、result、completed_at、member_name、staff_name、planned_at |
 | PointsAccount / PointsRecord | 账户含 member_id、balance、total_earned、total_spent；流水含 id、member_id、delta_points、balance_before、balance_after、record_type、source_type、created_at；后台另含经授权的 reason、operator_account_id、exchange_order_id |
 | Product | id、name、category、description、cover_url、image_urls、points_price、per_user_monthly_limit、in_stock；后台另含 stock、status、sort_order、version、图片对象键 |
 | Order | id、order_no、product_id、product_snapshot、quantity、points_cost_total、status、created_at、verified_at；后台另含 member_id、verified_by_account_id |
@@ -75,6 +75,8 @@
 
 ## 员工与客户运营
 
+跟进记录按 `followup_at` 倒序，任务按 `planned_at` 倒序。`planned_at` 优先取最新的 `postponed_until`，否则取 `scheduled_at`。时间筛选采用 `[from, to)`，任务使用 `planned_at`，跟进使用 `followup_at`。多次延期更新同一任务。填写 `next_followup_at` 不创建任务，完成任务也无需新增跟进记录。
+
 | 方法与路径 | 权限组 | 请求和响应 |
 |---|---|---|
 | GET /staff/me | R5 | 当前 Staff。 |
@@ -87,8 +89,8 @@
 | POST /customers/{id}/followups | R6 | contact_type、content 必填，可传 followup_at、customer_feedback、effective_contact、gift_given、gift_name、next_followup_at。返回 Followup。家访用 home_visit。 |
 | POST /customers/{id}/transfer | R7 | 首次分配与转移共用。to_staff_id、reason、expected_assignment_id 均必填，reason 去首尾空白后为 1–500 字。expected_assignment_id 显式传 null 表示无当前归属，传 UUID 表示操作者看到的当前归属记录。成功返回 200，data 含 current_assignment 和 previous_assignment_id（首次分配为 null）。 |
 | GET /followup-tasks | R8 | Task 列表，筛选 status、task_type、assigned_staff_id、from、to，受角色范围限制。 |
-| POST /followup-tasks | R9 | member_id、assigned_staff_id、title、scheduled_at，返回人工 Task。系统生成的复查、唤醒由后台任务执行。 |
-| POST /followup-tasks/{id}/complete、/postpone、/ignore | R8 | 完成或忽略提交 result，延期提交 postponed_until，可附 result。返回更新后的 Task；已完成或已忽略的任务拒绝变更。 |
+| POST /followup-tasks | R9 | member_id、assigned_staff_id、title、scheduled_at，返回人工 Task。任务必须指派给客户当前负责人；归属不匹配返回 409 ASSIGNMENT_CHANGED。系统生成的复查和唤醒任务由后续阶段实现。 |
+| POST /followup-tasks/{id}/complete、/postpone、/ignore | R8 | 完成或忽略提交 result，延期提交 postponed_until，可附 result。返回更新后的 Task；已完成或已忽略的任务返回 409 TASK_TERMINAL。 |
 | POST /exchange-orders/{id}/verify | R10 | token 必填；服务端以订单路径与凭证建立交叉绑定。返回 verified 及 verified_at；员工使用需另行确认。 |
 | POST /exchange-orders/verify | R10 | 扫码入口，仅提交 token。服务端定位订单后执行与按订单核销相同的授权和事务。 |
 

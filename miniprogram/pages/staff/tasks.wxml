@@ -1,1 +1,43 @@
-<workspace-shell />
+<view class="workspace workspace-with-tabs">
+  <view class="workspace-hero"><view class="workspace-role">员工端</view><view class="workspace-title">回访任务</view></view>
+  <view class="workspace-panel">
+    <view wx:if="{{loading}}" class="workspace-row">正在加载…</view>
+    <block wx:elif="{{error}}"><view class="workspace-row">{{error}}</view><t-button block variant="outline" bindtap="retry">重试</t-button></block>
+    <view wx:elif="{{!items.length}}" class="workspace-row">暂无回访任务</view>
+    <view wx:for="{{items}}" wx:key="id" class="followup-item">
+      <navigator url="/pages/staff/customer-detail?id={{item.member_id}}">{{item.member_name}} · {{item.title}} ›</navigator>
+      <view>{{item.planned}} · {{item.statusName}}</view>
+      <view wx:if="{{item.editable}}" class="workspace-row">
+        <t-button size="small" data-id="{{item.id}}" data-action="complete" bindtap="choose">完成</t-button>
+        <t-button size="small" data-id="{{item.id}}" data-action="postpone" bindtap="choose">延期</t-button>
+        <t-button size="small" variant="outline" data-id="{{item.id}}" data-action="ignore" bindtap="choose">忽略</t-button>
+      </view>
+    </view>
+    <view wx:if="{{!loading && !error && total > 20}}" class="workspace-row">
+      <t-button size="small" disabled="{{page === 1}}" bindtap="previous">上一页</t-button>
+      <text>第 {{page}} 页</text>
+      <t-button size="small" disabled="{{page * 20 >= total}}" bindtap="next">下一页</t-button>
+    </view>
+  </view>
+  <view wx:if="{{taskId}}" class="task-overlay">
+    <view class="workspace-panel">
+      <view class="workspace-heading">{{actionName}}回访任务</view>
+      <view wx:if="{{action === 'postpone'}}" class="workspace-row">
+        <picker mode="date" value="{{date}}" bindchange="changeDate"><text>{{date}} ▾</text></picker>
+        <picker mode="time" value="{{time}}" bindchange="changeTime"><text>{{time}} ▾</text></picker>
+      </view>
+      <textarea value="{{result}}" bindinput="changeResult" placeholder="处理结果{{action === 'postpone' ? '（可选）' : ''}}" maxlength="-1" />
+      <view wx:if="{{actionError}}">{{actionError}}</view>
+      <view class="workspace-row">
+        <t-button variant="outline" disabled="{{saving}}" bindtap="cancel">取消</t-button>
+        <t-button theme="primary" loading="{{saving}}" disabled="{{saving}}" bindtap="submit">确认</t-button>
+      </view>
+    </view>
+  </view>
+  <view class="workspace-tabs">
+    <navigator class="workspace-tab" url="/pages/staff/dashboard" open-type="reLaunch">工作台</navigator>
+    <navigator class="workspace-tab" url="/pages/staff/customers" open-type="reLaunch">客户</navigator>
+    <view class="workspace-tab workspace-current">回访</view>
+    <navigator class="workspace-tab" url="/pages/staff/profile" open-type="reLaunch">我的</navigator>
+  </view>
+</view>

@@ -120,6 +120,14 @@ export class AdminSession {
     return this.request<T>('/admin' + path, { signal });
   }
 
+  async followupTasks<T>(query: string, signal: AbortSignal): Promise<T> {
+    return this.request<T>('/followup-tasks?' + query, { signal });
+  }
+
+  async writeFollowupTask(path: '' | `/${string}/ignore`, body: object): Promise<void> {
+    await this.request('/followup-tasks' + path, { method: 'POST', body: JSON.stringify(body) });
+  }
+
   async writeStaff<T>(path: string, method: 'POST' | 'PATCH', body?: object): Promise<T> {
     return this.request<T>('/admin/staff' + path, { method, body: body && JSON.stringify(body) });
   }

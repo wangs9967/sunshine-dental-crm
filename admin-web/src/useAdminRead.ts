@@ -2,16 +2,18 @@ import { useEffect, useState } from 'react';
 import { AdminRequestError } from './session';
 import type { AdminSession } from './session';
 
-export function useAdminRead<T>(session: AdminSession, path?: string, revision = 0) {
+export function useAdminRead<T>(session: AdminSession, path?: string, revision = 0, taskQuery?: string) {
   const [attempt, setAttempt] = useState(0);
-  const key = JSON.stringify([path, revision, attempt]);
+  const key = JSON.stringify([path, revision, attempt, taskQuery]);
   const [result, setResult] = useState<{
     key: string; session: AdminSession; data?: T; error?: string; expired?: boolean;
   }>();
   useEffect(() => {
-    if (!path) return;
+    if (!path && taskQuery === undefined) return;
     const controller = new AbortController();
-    session.read<T>(path, controller.signal).then(
+    const request = taskQuery === undefined
+      ? session.read<T>(path!, controller.signal) : session.followupTasks<T>(taskQuery, controller.signal);
+    request.then(
       (data) => { if (!controller.signal.aborted) setResult({ key, session, data }); },
       (error: unknown) => {
         if (controller.signal.aborted) return;
@@ -23,7 +25,7 @@ export function useAdminRead<T>(session: AdminSession, path?: string, revision =
       },
     );
     return () => controller.abort();
-  }, [session, path, key]);
+  }, [session, path, key, taskQuery]);
   const current = result?.key === key && result.session === session ? result : undefined;
   return { data: current?.data, error: current?.error, expired: current?.expired, retry: () => setAttempt((n) => n + 1) };
 }

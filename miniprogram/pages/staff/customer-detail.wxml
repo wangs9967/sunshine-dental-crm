@@ -17,6 +17,9 @@
     <view class="workspace-row"><text>到店状态</text><text>{{customer.statuses[0]}}</text></view>
     <view class="workspace-row"><text>消费状态</text><text>{{customer.statuses[1]}}</text></view>
     <view class="workspace-row"><text>成交状态</text><text>{{customer.statuses[2]}}</text></view>
+    <navigator class="workspace-row" url="/pages/staff/followup-create?id={{id}}">新增跟进 ›</navigator>
+    <navigator class="workspace-row" url="/pages/staff/home-visit?id={{id}}">家访记录 ›</navigator>
+    <navigator class="workspace-row" url="/pages/staff/followup-history?id={{id}}">跟进历史 ›</navigator>
   </view>
   <t-button theme="primary" variant="outline" block bindtap="returnToList">返回客户列表</t-button>
 </view>

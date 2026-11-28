@@ -1,0 +1,17 @@
+<template name="followupForm">
+  <view class="workspace">
+    <view class="workspace-panel">
+      <view class="workspace-title">{{home ? '新增家访' : '新增跟进'}}</view>
+      <view wx:if="{{error}}" class="workspace-row">{{error}}</view>
+      <block wx:if="{{available}}">
+        <picker wx:if="{{!home}}" range="{{types}}" value="{{typeIndex}}" bindchange="changeType">
+          <view class="workspace-row">跟进类型：{{types[typeIndex]}} ▾</view>
+        </picker>
+        <view wx:else class="workspace-row">跟进类型：家访</view>
+        <textarea value="{{content}}" bindinput="changeContent" placeholder="填写运营沟通内容" maxlength="-1" />
+        <t-button theme="primary" block loading="{{busy}}" disabled="{{busy}}" bindtap="submit">保存记录</t-button>
+        <navigator wx:if="{{home}}" class="workspace-row" url="/pages/staff/followup-history?id={{id}}&amp;home=1">查看家访历史</navigator>
+      </block>
+    </view>
+  </view>
+</template>

@@ -121,6 +121,10 @@ export function readEmployee<T>(path: string, data?: Record<string, string | num
   return staffRequest(path, 'GET', data);
 }
 
+export function writeEmployee<T>(path: string, data: Record<string, string | number>): Promise<T> {
+  return staffRequest(path, 'POST', data);
+}
+
 export function loadStaffProfile(): Promise<StaffProfile> {
   return readEmployee('/staff/me');
 }

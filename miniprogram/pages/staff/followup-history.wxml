@@ -1,1 +1,20 @@
-<workspace-shell />
+<view class="workspace">
+  <view class="workspace-panel">
+    <view class="workspace-title">{{home ? '家访历史' : '跟进历史'}}</view>
+    <view wx:if="{{loading}}" class="workspace-row">正在加载…</view>
+    <block wx:elif="{{error}}">
+      <view class="workspace-row">{{error}}</view>
+      <t-button block variant="outline" bindtap="retry">重试</t-button>
+    </block>
+    <view wx:elif="{{!items.length}}" class="workspace-row">暂无记录</view>
+    <view wx:for="{{items}}" wx:key="id" class="followup-item">
+      <view>{{item.time}} · {{item.typeName}}</view>
+      <text selectable>{{item.content}}</text>
+    </view>
+    <view wx:if="{{!loading && !error && total > 20}}" class="workspace-row">
+      <t-button size="small" disabled="{{page === 1}}" bindtap="previous">上一页</t-button>
+      <text>第 {{page}} 页</text>
+      <t-button size="small" disabled="{{page * 20 >= total}}" bindtap="next">下一页</t-button>
+    </view>
+  </view>
+</view>

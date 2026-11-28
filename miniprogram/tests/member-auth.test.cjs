@@ -297,3 +297,42 @@ test('cold startup with an unavailable API remains on login and allows retry', a
   await entry.login();
   assert.equal(cold.routes.at(-1), '/pages/member/home');
 });
+
+test('home visit submits the fixed type and refreshes the filtered history', async () => {
+  const id = '11111111-1111-1111-1111-111111111111';
+  const env = harness([{ data: employeeSession }, { status: 201, data: {} }, { data: {
+    items: [{ id, contact_type: 'home_visit', content: '家访测试', followup_at: '2030-04-05T01:00:00Z' }], total: 1,
+  } }]);
+  await env.page('pages/auth/index.ts').staffLogin();
+  const form = env.page('pages/staff/home-visit.ts');
+  form.onLoad({ id });
+  await form.submit();
+  assert.match(form.data.error, /沟通内容/);
+  form.changeContent({ detail: { value: ' 家访测试 ' } });
+  await form.submit();
+  assert.equal(env.requests[1].data.contact_type, 'home_visit');
+  assert.equal(env.requests[1].data.content, '家访测试');
+  assert.equal(env.routes.at(-1), '/pages/staff/followup-history?id=' + id + '&home=1');
+  const history = env.page('pages/staff/followup-history.ts');
+  history.onLoad({ id, home: '1' });
+  await history.load(1);
+  assert.equal(env.requests[2].data.contact_type, 'home_visit');
+  assert.equal(history.data.items[0].time, '2030-04-05 09:00');
+});
+
+test('postponing a staff task refreshes its displayed time', async () => {
+  const item = { id: 'task', title: '回访', status: 'pending', planned_at: '2030-04-05T01:00:00Z' };
+  const env = harness([{ data: employeeSession }, { data: { items: [item], total: 1 } }, { data: {} }, {
+    data: { items: [{ ...item, status: 'postponed', planned_at: '2030-04-06T01:00:00Z' }], total: 1 },
+  }]);
+  await env.page('pages/auth/index.ts').staffLogin();
+  const task = env.page('pages/staff/tasks.ts');
+  await task.load(1);
+  task.choose({ currentTarget: { dataset: { id: 'task', action: 'postpone' } } });
+  task.setData({ date: '2030-04-06', time: '09:00' });
+  await task.submit();
+  assert.match(env.requests[2].url, /\/followup-tasks\/task\/postpone$/);
+  assert.equal(env.requests[2].data.postponed_until, '2030-04-06T09:00:00+08:00');
+  assert.equal(task.data.items[0].statusName, '已延期');
+  assert.equal(task.data.items[0].planned, '2030-04-06 09:00');
+});
